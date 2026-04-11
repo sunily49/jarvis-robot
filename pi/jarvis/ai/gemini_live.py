@@ -31,6 +31,7 @@ class GeminiLiveClient:
         self._ws = None
         self._running = False
         self._audio_task: asyncio.Task | None = None
+        self._camera_task: asyncio.Task | None = None
         self._receive_task: asyncio.Task | None = None
         self._tool_registry: dict[str, Any] = {}
         self._person_name: str | None = None
@@ -62,12 +63,20 @@ class GeminiLiveClient:
                 # Send setup message
                 await self._send_setup(trigger_data)
 
-                # Start concurrent audio send + receive
+                # Start concurrent tasks: audio in, camera in, responses out
                 self._audio_task = asyncio.create_task(self._send_audio_loop())
                 self._receive_task = asyncio.create_task(self._receive_loop())
 
-                # Wait for session to end
-                await asyncio.gather(self._audio_task, self._receive_task)
+                # Camera streaming — only if camera is enabled
+                if settings.TOOL_CAMERA_PTZ or settings.TRIGGER_FACE:
+                    self._camera_task = asyncio.create_task(self._send_camera_loop())
+
+                tasks = [self._audio_task, self._receive_task]
+                if self._camera_task:
+                    tasks.append(self._camera_task)
+
+                # Wait for session to end (any task finishing ends the session)
+                await asyncio.gather(*tasks)
 
         except Exception:
             logger.exception("Gemini Live session error")
@@ -166,6 +175,46 @@ class GeminiLiveClient:
             except Exception:
                 logger.exception("Audio send error")
                 break
+
+    async def _send_camera_loop(self) -> None:
+        """Continuously stream camera frames to Gemini Live for visual context.
+
+        Sends 1 frame every 2 seconds — enough for scene awareness without
+        saturating the WebSocket. Gemini can describe what it sees, detect
+        objects/people, and answer "what do you see?" in real time.
+        """
+        try:
+            from jarvis.vision.camera_controller import camera_controller
+        except Exception:
+            logger.warning("Camera controller unavailable — no visual feed to Gemini")
+            return
+
+        logger.info("Camera streaming to Gemini Live started (1 fps)")
+
+        while self._running:
+            try:
+                jpeg_bytes = await camera_controller.capture_frame()
+                if jpeg_bytes and self._ws and self._running:
+                    msg = {
+                        "realtime_input": {
+                            "media_chunks": [{
+                                "data": base64.b64encode(jpeg_bytes).decode("utf-8"),
+                                "mime_type": "image/jpeg",
+                            }]
+                        }
+                    }
+                    await self._ws.send(json.dumps(msg))
+
+                # 1 frame per 2 seconds — balances visual awareness vs bandwidth
+                await asyncio.sleep(2.0)
+
+            except asyncio.CancelledError:
+                break
+            except Exception:
+                logger.debug("Camera frame send failed — skipping frame")
+                await asyncio.sleep(2.0)
+
+        logger.info("Camera streaming to Gemini Live stopped")
 
     async def _receive_loop(self) -> None:
         """Receive and process Gemini Live responses."""
@@ -297,10 +346,9 @@ class GeminiLiveClient:
     async def close(self) -> None:
         """Close the session."""
         self._running = False
-        if self._audio_task:
-            self._audio_task.cancel()
-        if self._receive_task:
-            self._receive_task.cancel()
+        for task in (self._audio_task, self._camera_task, self._receive_task):
+            if task:
+                task.cancel()
         if self._ws:
             try:
                 await self._ws.close()
