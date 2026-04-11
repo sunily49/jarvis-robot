@@ -1,0 +1,134 @@
+"""
+JARVIS Configuration — loads all settings from .env with sensible defaults.
+Every trigger, tool, and feature is gated by a boolean flag.
+"""
+
+import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Load .env from project root (pi/ directory)
+_ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
+load_dotenv(_ENV_PATH)
+
+
+def _bool(key: str, default: bool = False) -> bool:
+    return os.getenv(key, str(default)).lower() in ("true", "1", "yes")
+
+
+def _int(key: str, default: int = 0) -> int:
+    return int(os.getenv(key, str(default)))
+
+
+def _str(key: str, default: str = "") -> str:
+    return os.getenv(key, default)
+
+
+# ── API Keys ──────────────────────────────────────────────────────────
+GEMINI_API_KEY = _str("GEMINI_API_KEY")
+TELEGRAM_BOT_TOKEN = _str("TELEGRAM_BOT_TOKEN")
+TELEGRAM_ALLOWED_USERS = _str("TELEGRAM_ALLOWED_USERS")  # comma-separated IDs
+
+# ── Triggers ──────────────────────────────────────────────────────────
+TRIGGER_WAKEWORD = _bool("TRIGGER_WAKEWORD", True)
+TRIGGER_BUTTON = _bool("TRIGGER_BUTTON", True)
+TRIGGER_FACE = _bool("TRIGGER_FACE", True)
+TRIGGER_CLAP = _bool("TRIGGER_CLAP", False)
+TRIGGER_PIR = _bool("TRIGGER_PIR", False)
+TRIGGER_TELEGRAM = _bool("TRIGGER_TELEGRAM", False)
+
+# ── AI ────────────────────────────────────────────────────────────────
+AI_GEMINI_LIVE = _bool("AI_GEMINI_LIVE", True)
+AI_GEMINI_FLASH = _bool("AI_GEMINI_FLASH", True)
+AI_OLLAMA_FALLBACK = _bool("AI_OLLAMA_FALLBACK", True)
+
+# ── Vision (offloaded to server) ─────────────────────────────────────
+VISION_FACE_RECOGNITION = _bool("VISION_FACE_RECOGNITION", True)
+VISION_YOLO = _bool("VISION_YOLO", False)
+VISION_GESTURE = _bool("VISION_GESTURE", False)
+VISION_ANOMALY = _bool("VISION_ANOMALY", False)
+
+# ── MCP Tools ─────────────────────────────────────────────────────────
+TOOL_MUSIC = _bool("TOOL_MUSIC", False)
+TOOL_WEB_SEARCH = _bool("TOOL_WEB_SEARCH", True)
+TOOL_HOME_ASSISTANT = _bool("TOOL_HOME_ASSISTANT", False)
+TOOL_MOTOR = _bool("TOOL_MOTOR", False)
+TOOL_GPIO = _bool("TOOL_GPIO", False)
+TOOL_CAMERA_PTZ = _bool("TOOL_CAMERA_PTZ", True)
+TOOL_MEMORY = _bool("TOOL_MEMORY", True)
+
+# ── Hardware ──────────────────────────────────────────────────────────
+HW_MOTORS = _bool("HW_MOTORS", False)
+HW_SERVOS = _bool("HW_SERVOS", False)
+HW_SENSORS = _bool("HW_SENSORS", False)
+
+# ── Server ────────────────────────────────────────────────────────────
+SERVER_ENABLED = _bool("SERVER_ENABLED", True)
+SERVER_HOST = _str("SERVER_HOST", "jarvis-server.local")
+SERVER_PORT = _int("SERVER_PORT", 9000)
+SERVER_HEALTH_INTERVAL = _int("SERVER_HEALTH_INTERVAL", 30)  # seconds
+
+# ── Audio ─────────────────────────────────────────────────────────────
+AUDIO_DEVICE_INDEX = _int("AUDIO_DEVICE_INDEX", -1)  # -1 = auto
+AUDIO_SAMPLE_RATE = _int("AUDIO_SAMPLE_RATE", 48000)
+AUDIO_TARGET_RATE = _int("AUDIO_TARGET_RATE", 16000)
+AUDIO_CHUNK_SIZE = _int("AUDIO_CHUNK_SIZE", 1024)
+
+# ── Wake Word ─────────────────────────────────────────────────────────
+WAKEWORD_MODEL_PATH = _str("WAKEWORD_MODEL_PATH", "/home/admin/wakeword_models/hey_jarvis.onnx")
+WAKEWORD_THRESHOLD = float(os.getenv("WAKEWORD_THRESHOLD", "0.7"))
+
+# ── TTS ───────────────────────────────────────────────────────────────
+PIPER_MODEL_PATH = _str("PIPER_MODEL_PATH", "/home/admin/piper_models/en_US-lessac-medium.onnx")
+PIPER_CONFIG_PATH = _str("PIPER_CONFIG_PATH", "/home/admin/piper_models/en_US-lessac-medium.onnx.json")
+
+# ── Camera ────────────────────────────────────────────────────────────
+CAMERA_DEVICE = _str("CAMERA_DEVICE", "/dev/video0")
+CAMERA_FRAME_WIDTH = _int("CAMERA_FRAME_WIDTH", 640)
+CAMERA_FRAME_HEIGHT = _int("CAMERA_FRAME_HEIGHT", 480)
+CAMERA_CAPTURE_INTERVAL = _int("CAMERA_CAPTURE_INTERVAL", 5)  # seconds
+
+# ── GPIO Pins ─────────────────────────────────────────────────────────
+GPIO_BUTTON_PIN = _int("GPIO_BUTTON_PIN", 17)
+GPIO_PIR_PIN = _int("GPIO_PIR_PIN", 27)
+GPIO_RELAY_PINS = _str("GPIO_RELAY_PINS", "22,23,24,25")  # comma-separated
+GPIO_EMERGENCY_STOP_PIN = _int("GPIO_EMERGENCY_STOP_PIN", 5)
+
+# ── Motors ────────────────────────────────────────────────────────────
+MOTOR_ENA_PIN = _int("MOTOR_ENA_PIN", 12)
+MOTOR_IN1_PIN = _int("MOTOR_IN1_PIN", 6)
+MOTOR_IN2_PIN = _int("MOTOR_IN2_PIN", 13)
+MOTOR_ENB_PIN = _int("MOTOR_ENB_PIN", 18)
+MOTOR_IN3_PIN = _int("MOTOR_IN3_PIN", 19)
+MOTOR_IN4_PIN = _int("MOTOR_IN4_PIN", 26)
+MOTOR_MAX_SPEED = _int("MOTOR_MAX_SPEED", 80)  # PWM duty cycle 0-100
+
+# ── Trigger Manager ──────────────────────────────────────────────────
+TRIGGER_COOLDOWN = float(os.getenv("TRIGGER_COOLDOWN", "3.0"))  # seconds
+
+# ── MQTT / Home Assistant ────────────────────────────────────────────
+MQTT_BROKER = _str("MQTT_BROKER", "")
+MQTT_PORT = _int("MQTT_PORT", 1883)
+MQTT_USERNAME = _str("MQTT_USERNAME", "")
+MQTT_PASSWORD = _str("MQTT_PASSWORD", "")
+
+# ── Memory ────────────────────────────────────────────────────────────
+MEMORY_DB_PATH = _str("MEMORY_DB_PATH", "/home/admin/jarvis/data/jarvis.db")
+MEMORY_SHORT_TERM_LIMIT = _int("MEMORY_SHORT_TERM_LIMIT", 5)
+MEMORY_RETENTION_DAYS = _int("MEMORY_RETENTION_DAYS", 30)
+
+# ── Logging ───────────────────────────────────────────────────────────
+LOG_LEVEL = _str("LOG_LEVEL", "INFO")
+
+# ── Display ────────────────────────────────────────────────────────────
+DISPLAY_ENABLED = _bool("DISPLAY_ENABLED", False)
+DISPLAY_WIDTH = _int("DISPLAY_WIDTH", 800)
+DISPLAY_HEIGHT = _int("DISPLAY_HEIGHT", 480)
+DISPLAY_FPS = _int("DISPLAY_FPS", 30)
+DISPLAY_FULLSCREEN = _bool("DISPLAY_FULLSCREEN", True)
+DISPLAY_BRIGHTNESS = _int("DISPLAY_BRIGHTNESS", 80)  # 0-100
+DISPLAY_IDLE_TIMEOUT = _int("DISPLAY_IDLE_TIMEOUT", 300)  # seconds before screen dims
+
+# ── MCP Server ────────────────────────────────────────────────────────
+MCP_HOST = _str("MCP_HOST", "127.0.0.1")
+MCP_PORT = _int("MCP_PORT", 8080)

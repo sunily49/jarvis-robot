@@ -1,0 +1,21 @@
+[Unit]
+Description=JARVIS Home Server (ML Offloading)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=admin
+WorkingDirectory=/home/admin/jarvis-server
+ExecStart=/home/admin/jarvis-server/venv/bin/python main.py
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+Environment="PYTHONUNBUFFERED=1"
+Environment="PORT=9000"
+Environment="OLLAMA_HOST=http://localhost:11434"
+Environment="OLLAMA_MODEL=mistral"
+
+[Install]
+WantedBy=multi-user.target

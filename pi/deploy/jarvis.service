@@ -1,0 +1,32 @@
+[Unit]
+Description=JARVIS Robot AI Assistant
+After=network-online.target sound.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=admin
+Group=admin
+WorkingDirectory=/home/admin/jarvis/pi
+ExecStart=/home/admin/jarvis/venv/bin/python -m jarvis.main
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+Environment="PYTHONUNBUFFERED=1"
+EnvironmentFile=/home/admin/jarvis/pi/.env
+
+# Resource limits
+MemoryMax=2G
+CPUQuota=85%
+
+# Security hardening
+NoNewPrivileges=false
+ProtectSystem=false
+PrivateTmp=true
+
+# Allow GPIO and device access
+SupplementaryGroups=gpio video audio i2c spi
+
+[Install]
+WantedBy=multi-user.target
