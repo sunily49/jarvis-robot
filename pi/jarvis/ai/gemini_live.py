@@ -33,14 +33,24 @@ class GeminiLiveClient:
         self._audio_task: asyncio.Task | None = None
         self._receive_task: asyncio.Task | None = None
         self._tool_registry: dict[str, Any] = {}
+        self._person_name: str | None = None
+        self._person_profile: dict | None = None
 
     def register_tools(self, tools: dict[str, Any]) -> None:
         """Register MCP tools for function calling."""
         self._tool_registry.update(tools)
 
-    async def run_session(self, trigger_data: dict[str, Any]) -> None:
+    async def run_session(
+        self,
+        trigger_data: dict[str, Any],
+        person_name: str | None = None,
+        person_profile: dict | None = None,
+    ) -> None:
         """Run a full Gemini Live conversation session."""
         import websockets
+
+        self._person_name = person_name
+        self._person_profile = person_profile
 
         url = f"{GEMINI_WS_URL}?key={settings.GEMINI_API_KEY}"
 
@@ -83,10 +93,21 @@ class GeminiLiveClient:
         except Exception:
             pass
 
-        # Add face identity if known
-        face_name = trigger_data.get("data", {}).get("face_name")
-        if face_name:
-            system_parts.append(f"You are currently speaking with {face_name}.")
+        # Inject identified person context
+        if self._person_name:
+            system_parts.append(f"You are currently speaking with {self._person_name}.")
+            if self._person_profile:
+                prefs = self._person_profile.get("preferences", {})
+                notes = self._person_profile.get("notes", "")
+                encounters = self._person_profile.get("encounter_count", 0)
+                if encounters == 1:
+                    system_parts.append(f"This is your first time meeting {self._person_name}.")
+                else:
+                    system_parts.append(f"You have met {self._person_name} {encounters} times before.")
+                if prefs.get("greeting"):
+                    system_parts.append(f"Preferred greeting for {self._person_name}: {prefs['greeting']}")
+                if notes:
+                    system_parts.append(f"Notes about {self._person_name}: {notes}")
 
         setup_msg = {
             "setup": {
@@ -165,19 +186,58 @@ class GeminiLiveClient:
 
                     parts = content.get("modelTurn", {}).get("parts", [])
                     for part in parts:
-                        # Audio response
+                        # Audio response — signal RESPONDING state on first chunk
                         if "inlineData" in part:
                             audio_b64 = part["inlineData"]["data"]
                             audio_bytes = base64.b64decode(audio_b64)
                             await audio_playback.play_gemini_chunk(audio_bytes, sample_rate=24000)
+                            await event_bus.publish("session.state_changed", {"state": "RESPONDING"})
 
-                        # Text response (for logging/memory)
+                        # Text response — log, memory, display transcript
                         if "text" in part:
-                            logger.info("Gemini text: %s", part["text"][:100])
-                            await event_bus.publish("gemini.text", {"text": part["text"]})
+                            text = part["text"]
+                            logger.info("Gemini text: %s", text[:100])
+                            await event_bus.publish("gemini.text", {"text": text})
+                            await event_bus.publish("session.transcript", {
+                                "role": "assistant",
+                                "text": text,
+                            })
+                            # Save to conversation memory
+                            try:
+                                from jarvis.memory.conversation_memory import conversation_memory
+                                await conversation_memory.append_exchange(
+                                    role="assistant",
+                                    content=text,
+                                    metadata={"person": self._person_name},
+                                )
+                            except Exception:
+                                pass
+
+                    if content.get("turnComplete"):
+                        # Back to PROCESSING (listening for user input)
+                        await event_bus.publish("session.state_changed", {"state": "PROCESSING"})
 
                 elif "toolCall" in data:
                     await self._handle_tool_call(data["toolCall"])
+
+                # User speech detected — publish transcript placeholder
+                elif "inputTranscript" in data:
+                    text = data["inputTranscript"].get("text", "")
+                    if text:
+                        await event_bus.publish("session.transcript", {
+                            "role": "user",
+                            "text": text,
+                        })
+                        await event_bus.publish("session.state_changed", {"state": "PROCESSING"})
+                        try:
+                            from jarvis.memory.conversation_memory import conversation_memory
+                            await conversation_memory.append_exchange(
+                                role="user",
+                                content=text,
+                                metadata={"person": self._person_name},
+                            )
+                        except Exception:
+                            pass
 
             except asyncio.TimeoutError:
                 logger.info("Session timeout — no activity for 30s")

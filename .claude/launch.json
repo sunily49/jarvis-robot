@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "JARVIS Pi (main robot)",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "jarvis.main"],
+      "port": 8080
+    },
+    {
+      "name": "JARVIS Server (ML offload)",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["server/main.py"],
+      "port": 9000
+    }
+  ]
+}

@@ -33,3 +33,4 @@ Thumbs.db
 
 # Node (for docx generation)
 node_modules/
+.claude/settings.local.json
