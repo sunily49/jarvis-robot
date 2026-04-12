@@ -54,7 +54,7 @@ class ConversationMemory:
             );
             CREATE TABLE IF NOT EXISTS entities (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
+                name TEXT NOT NULL UNIQUE,
                 type TEXT NOT NULL,
                 first_seen REAL NOT NULL,
                 last_seen REAL NOT NULL,

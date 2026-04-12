@@ -4,9 +4,10 @@ import asyncio
 import os
 import tempfile
 import pytest
+import pytest_asyncio
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def memory():
     from jarvis.memory.conversation_memory import ConversationMemory
 
