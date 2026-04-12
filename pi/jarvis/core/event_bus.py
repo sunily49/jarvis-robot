@@ -9,6 +9,7 @@ Usage:
 
 import asyncio
 import fnmatch
+import itertools
 import logging
 from dataclasses import dataclass, field
 from typing import Any, Callable, Coroutine
@@ -17,12 +18,14 @@ logger = logging.getLogger(__name__)
 
 EventHandler = Callable[[str, dict[str, Any]], Coroutine[Any, Any, None]]
 
+_id_counter = itertools.count(1)
+
 
 @dataclass
 class _Subscription:
     pattern: str
     handler: EventHandler
-    id: int = field(default_factory=lambda: id(object()))
+    id: int = field(default_factory=lambda: next(_id_counter))
 
 
 class EventBus:
