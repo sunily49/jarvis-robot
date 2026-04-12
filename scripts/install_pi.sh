@@ -122,22 +122,44 @@ progress "Installing system packages..."
 
 sudo apt-get update -qq
 
-PACKAGES=(
+# Core required packages
+PACKAGES_REQUIRED=(
     python3-pip python3-venv python3-dev
     portaudio19-dev libportaudio2
-    libopencv-dev python3-opencv
-    libatlas-base-dev
     v4l-utils
     alsa-utils
-    mpv
     cmake build-essential
     git wget curl
-    i2c-tools
     libffi-dev libssl-dev
 )
 
-sudo apt-get install -y -qq "${PACKAGES[@]}" 2>/dev/null
-ok "System packages installed"
+# Optional packages — names vary by Debian/Ubuntu version; try each individually
+PACKAGES_OPTIONAL=(
+    "libopenblas-dev libatlas-base-dev"   # numpy BLAS: trixie uses libopenblas-dev; bookworm has both
+    "python3-opencv"                      # system OpenCV (pip version used if missing)
+    "i2c-tools"                           # I2C for PCA9685 servo board
+    "mpv"                                 # Music playback (only needed if TOOL_MUSIC=true)
+)
+
+echo "  Installing required packages..."
+sudo apt-get install -y "${PACKAGES_REQUIRED[@]}"
+ok "Required system packages installed"
+
+echo "  Installing optional packages (failures are non-fatal)..."
+for pkg_group in "${PACKAGES_OPTIONAL[@]}"; do
+    # Try each name in the group until one succeeds
+    installed=false
+    for pkg in $pkg_group; do
+        if sudo apt-get install -y -q "$pkg" 2>/dev/null; then
+            ok "  $pkg"
+            installed=true
+            break
+        fi
+    done
+    if [ "$installed" = false ]; then
+        warn "  ${pkg_group%% *} not available — skipping (non-fatal)"
+    fi
+done
 
 # ══════════════════════════════════════════════════════════════════════
 # PYTHON VIRTUAL ENVIRONMENT
@@ -156,12 +178,24 @@ source "$VENV_DIR/bin/activate"
 pip install --upgrade pip setuptools wheel -q
 ok "pip/setuptools upgraded"
 
-pip install -r "$JARVIS_DIR/pi/requirements.txt" -q 2>/dev/null
+# Install requirements, skipping packages that fail (e.g. piper-tts on some ARM builds)
+echo "  Installing Python dependencies (this may take a few minutes)..."
+pip install -r "$JARVIS_DIR/pi/requirements.txt" --extra-index-url https://www.piwheels.org/simple/ 2>&1 \
+    | grep -E "^(Successfully|ERROR|WARNING: Could not)" || true
+
+# piper-tts: try piwheels arm64 wheel first, fall back gracefully
+if ! python3 -c "import piper" 2>/dev/null; then
+    pip install piper-tts --extra-index-url https://www.piwheels.org/simple/ -q 2>/dev/null \
+        && ok "piper-tts installed" \
+        || warn "piper-tts not available for this platform — TTS announcements will be skipped"
+fi
+
 ok "Python dependencies installed"
 
 # Pi-specific GPIO packages (ignore errors on non-Pi)
-pip install RPi.GPIO 2>/dev/null && ok "RPi.GPIO installed" || warn "RPi.GPIO skipped (not on Pi?)"
-pip install adafruit-circuitpython-pca9685 adafruit-circuitpython-motor 2>/dev/null && ok "Adafruit libs installed" || warn "Adafruit libs skipped"
+pip install RPi.GPIO -q 2>/dev/null && ok "RPi.GPIO installed" || warn "RPi.GPIO skipped"
+pip install adafruit-circuitpython-pca9685 adafruit-circuitpython-motor -q 2>/dev/null \
+    && ok "Adafruit servo/motor libs installed" || warn "Adafruit libs skipped (enable HW_SERVOS to install later)"
 
 # ══════════════════════════════════════════════════════════════════════
 # DATA DIRECTORIES
