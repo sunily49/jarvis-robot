@@ -14,7 +14,8 @@ websockets>=12.0
 
 # ── Audio ─────────────────────────────────────────────────────────────
 PyAudio>=0.2.14
-openwakeword>=0.6.0
+# openwakeword: installed separately in install_pi.sh using onnxruntime backend
+# (tflite-runtime is not available for Python 3.12+; install script handles this)
 piper-tts>=1.2.0
 
 # ── Vision ────────────────────────────────────────────────────────────

@@ -190,6 +190,25 @@ if ! python3 -c "import piper" 2>/dev/null; then
         || warn "piper-tts not available for this platform — TTS announcements will be skipped"
 fi
 
+# openwakeword: tflite-runtime doesn't support Python 3.12+; use onnxruntime backend instead
+if ! python3 -c "import openwakeword" 2>/dev/null; then
+    PY_VER=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+    echo "  Fixing openwakeword for Python $PY_VER (using onnxruntime backend)..."
+    pip install onnxruntime -q --extra-index-url https://www.piwheels.org/simple/ 2>/dev/null \
+        && pip install openwakeword --no-deps -q 2>/dev/null \
+        && pip install scipy coloredlogs requests tqdm -q 2>/dev/null \
+        && ok "openwakeword installed (onnxruntime backend)" \
+        || warn "openwakeword install failed — TRIGGER_WAKEWORD will be set to false"
+fi
+
+# If openwakeword still not available, disable it in .env to prevent startup crash
+if ! python3 -c "import openwakeword" 2>/dev/null; then
+    if [ -f "$JARVIS_DIR/pi/.env" ]; then
+        sed -i 's/^TRIGGER_WAKEWORD=true/TRIGGER_WAKEWORD=false/' "$JARVIS_DIR/pi/.env"
+        warn "TRIGGER_WAKEWORD disabled in .env (openwakeword not available for Python $PY_VER)"
+    fi
+fi
+
 ok "Python dependencies installed"
 
 # Pi-specific GPIO packages (ignore errors on non-Pi)
@@ -253,32 +272,51 @@ if command -v aplay &>/dev/null; then
     done
 fi
 
-# Auto-detect EMEET PIXY or USB mic
-USB_CARD=$(arecord -l 2>/dev/null | grep -i -m1 "USB\|EMEET\|PIXY" | awk -F'[: ]' '{print $2}')
-if [ -n "$USB_CARD" ]; then
-    ok "Detected USB audio device on card $USB_CARD"
+# Auto-detect audio devices:
+#   MIC_CARD  — prefer EMEET PIXY (camera mic), fall back to any USB input
+#   SPK_CARD  — prefer USB device with playback (not HDMI), fall back to MIC_CARD
+MIC_CARD=$(arecord -l 2>/dev/null | grep -i -m1 "EMEET\|PIXY" | awk -F'[: ]' '{print $2}')
+if [ -z "$MIC_CARD" ]; then
+    MIC_CARD=$(arecord -l 2>/dev/null | grep -i -m1 "USB" | awk -F'[: ]' '{print $2}')
+fi
 
-    # Create ALSA config to set USB as default
+# Speaker: USB device with playback that is NOT HDMI
+SPK_CARD=$(aplay -l 2>/dev/null | grep -i "USB" | grep -iv "hdmi" | awk -F'[: ]' '{print $2}' | head -1)
+if [ -z "$SPK_CARD" ]; then
+    SPK_CARD="$MIC_CARD"  # fallback: same device for both
+fi
+
+if [ -n "$MIC_CARD" ]; then
+    ok "Mic device: card $MIC_CARD  |  Speaker device: card $SPK_CARD"
+
     ASOUND_CONF="$HOME/.asoundrc"
     if [ ! -f "$ASOUND_CONF" ]; then
         cat > "$ASOUND_CONF" << EOF
-# JARVIS ALSA config — USB audio as default
+# JARVIS ALSA config — split mic/speaker
 pcm.!default {
     type asym
-    playback.pcm "plughw:${USB_CARD},0"
-    capture.pcm "plughw:${USB_CARD},0"
+    playback.pcm "plughw:${SPK_CARD},0"
+    capture.pcm  "plughw:${MIC_CARD},0"
 }
 ctl.!default {
     type hw
-    card ${USB_CARD}
+    card ${SPK_CARD}
 }
 EOF
-        ok "ALSA config written to $ASOUND_CONF (card $USB_CARD as default)"
+        ok "ALSA config written to $ASOUND_CONF (mic=card${MIC_CARD}, spk=card${SPK_CARD})"
     else
         warn "ALSA config exists at $ASOUND_CONF — not overwriting"
+        warn "To update: remove $ASOUND_CONF and re-run make install"
     fi
 else
     warn "No USB audio device detected — configure AUDIO_DEVICE_INDEX manually in .env"
+fi
+
+# Write detected device indices into .env for PyAudio
+if [ -n "$MIC_CARD" ] && [ -f "$JARVIS_DIR/pi/.env" ]; then
+    # PyAudio enumerates devices differently; -1 = auto-detect (PyAudio picks first available)
+    # User can override with make config if needed
+    sed -i "s/^AUDIO_DEVICE_INDEX=.*/AUDIO_DEVICE_INDEX=-1/" "$JARVIS_DIR/pi/.env" 2>/dev/null || true
 fi
 
 # ══════════════════════════════════════════════════════════════════════
