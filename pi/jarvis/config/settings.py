@@ -7,6 +7,8 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
+_HOME = Path.home()
+
 # Load .env from project root (pi/ directory)
 _ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
 load_dotenv(_ENV_PATH)
@@ -75,12 +77,12 @@ AUDIO_TARGET_RATE = _int("AUDIO_TARGET_RATE", 16000)
 AUDIO_CHUNK_SIZE = _int("AUDIO_CHUNK_SIZE", 1024)
 
 # ── Wake Word ─────────────────────────────────────────────────────────
-WAKEWORD_MODEL_PATH = _str("WAKEWORD_MODEL_PATH", "/home/admin/wakeword_models/hey_jarvis.onnx")
+WAKEWORD_MODEL_PATH = _str("WAKEWORD_MODEL_PATH", str(_HOME / "wakeword_models/hey_jarvis.onnx"))
 WAKEWORD_THRESHOLD = float(os.getenv("WAKEWORD_THRESHOLD", "0.7"))
 
 # ── TTS ───────────────────────────────────────────────────────────────
-PIPER_MODEL_PATH = _str("PIPER_MODEL_PATH", "/home/admin/piper_models/en_US-lessac-medium.onnx")
-PIPER_CONFIG_PATH = _str("PIPER_CONFIG_PATH", "/home/admin/piper_models/en_US-lessac-medium.onnx.json")
+PIPER_MODEL_PATH = _str("PIPER_MODEL_PATH", str(_HOME / "piper_models/en_US-lessac-medium.onnx"))
+PIPER_CONFIG_PATH = _str("PIPER_CONFIG_PATH", str(_HOME / "piper_models/en_US-lessac-medium.onnx.json"))
 
 # ── Camera ────────────────────────────────────────────────────────────
 CAMERA_DEVICE = _str("CAMERA_DEVICE", "/dev/video0")
@@ -113,7 +115,7 @@ MQTT_USERNAME = _str("MQTT_USERNAME", "")
 MQTT_PASSWORD = _str("MQTT_PASSWORD", "")
 
 # ── Memory ────────────────────────────────────────────────────────────
-MEMORY_DB_PATH = _str("MEMORY_DB_PATH", "/home/admin/jarvis/data/jarvis.db")
+MEMORY_DB_PATH = _str("MEMORY_DB_PATH", str(_HOME / "jarvis/data/jarvis.db"))
 MEMORY_SHORT_TERM_LIMIT = _int("MEMORY_SHORT_TERM_LIMIT", 5)
 MEMORY_RETENTION_DAYS = _int("MEMORY_RETENTION_DAYS", 30)
 
