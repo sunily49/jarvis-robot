@@ -40,7 +40,8 @@ class CameraController:
         if device is None:
             logger.error("No camera found (tried %s and /dev/video0–4)", settings.CAMERA_DEVICE)
             return
-        self._cap = cv2.VideoCapture(device)
+        self._cap = cv2.VideoCapture(device, cv2.CAP_V4L2)
+        self._cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
         self._cap.set(cv2.CAP_PROP_FRAME_WIDTH, settings.CAMERA_FRAME_WIDTH)
         self._cap.set(cv2.CAP_PROP_FRAME_HEIGHT, settings.CAMERA_FRAME_HEIGHT)
         if not self._cap.isOpened():
@@ -57,11 +58,15 @@ class CameraController:
             if dev in seen:
                 continue
             seen.add(dev)
-            cap = cv2.VideoCapture(dev)
-            opened = cap.isOpened()
-            cap.release()
-            if opened:
-                return dev
+            cap = cv2.VideoCapture(dev, cv2.CAP_V4L2)
+            if cap.isOpened():
+                cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
+                ret, _ = cap.read()
+                cap.release()
+                if ret:
+                    return dev
+            else:
+                cap.release()
         return None
 
     async def stop(self) -> None:

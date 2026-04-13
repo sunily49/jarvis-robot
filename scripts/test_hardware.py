@@ -13,16 +13,19 @@ def test_camera():
     print("\n[Camera]")
     try:
         import cv2
-        cap = cv2.VideoCapture("/dev/video0")
-        if cap.isOpened():
-            ret, frame = cap.read()
-            cap.release()
-            if ret:
-                print(f"  ✓ Camera OK — frame: {frame.shape}")
-                return True
-            print("  ✗ Camera opened but no frame")
-        else:
-            print("  ✗ Camera not found at /dev/video0")
+        for dev in ["/dev/video0", "/dev/video1", 0, 1]:
+            cap = cv2.VideoCapture(dev, cv2.CAP_V4L2)
+            if cap.isOpened():
+                cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
+                ret, frame = cap.read()
+                cap.release()
+                if ret:
+                    print(f"  ✓ Camera OK — {dev}, frame: {frame.shape}")
+                    return True
+                print(f"  ✗ Camera opened at {dev} but no frame")
+            else:
+                cap.release()
+        print("  ✗ Camera not found at /dev/video0 or /dev/video1")
         return False
     except ImportError:
         print("  ✗ opencv not installed")
