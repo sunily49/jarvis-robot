@@ -63,8 +63,7 @@ class WakeWordTrigger(BaseTrigger):
             return
 
         self._model = Model(
-            wakeword_model_paths=[str(model_path)],
-            inference_framework="onnx",
+            wakeword_models=[str(model_path)],
         )
 
         self._loop = asyncio.get_running_loop()
