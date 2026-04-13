@@ -77,7 +77,25 @@ AUDIO_TARGET_RATE = _int("AUDIO_TARGET_RATE", 16000)
 AUDIO_CHUNK_SIZE = _int("AUDIO_CHUNK_SIZE", 1024)
 
 # ── Wake Word ─────────────────────────────────────────────────────────
-WAKEWORD_MODEL_PATH = _str("WAKEWORD_MODEL_PATH", str(_HOME / "wakeword_models/hey_jarvis.onnx"))
+def _wakeword_model_default() -> str:
+    """Return configured path, or auto-locate from openwakeword package resources."""
+    configured = os.getenv("WAKEWORD_MODEL_PATH", str(_HOME / "wakeword_models/hey_jarvis.onnx"))
+    if Path(configured).exists():
+        return configured
+    # Fall back to bundled model inside the installed openwakeword package
+    try:
+        import openwakeword as _oww
+        import glob as _glob
+        pkg_models = Path(_oww.__file__).parent / "resources" / "models"
+        for pattern in ("*hey_jarvis*", "*jarvis*"):
+            matches = _glob.glob(str(pkg_models / pattern))
+            if matches:
+                return matches[0]
+    except Exception:
+        pass
+    return configured  # Return original even if missing — wakeword_trigger handles the error
+
+WAKEWORD_MODEL_PATH = _wakeword_model_default()
 WAKEWORD_THRESHOLD = float(os.getenv("WAKEWORD_THRESHOLD", "0.7"))
 
 # ── TTS ───────────────────────────────────────────────────────────────

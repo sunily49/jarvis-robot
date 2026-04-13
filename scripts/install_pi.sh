@@ -345,15 +345,32 @@ if [ "$SKIP_MODELS" = true ]; then
 else
     progress "Downloading AI models..."
 
-    # Wake word model
+    # Wake word model — download hey_jarvis directly from openWakeWord releases
     if [ ! -f "$WAKEWORD_DIR/hey_jarvis.onnx" ]; then
-        echo "  Downloading openWakeWord models..."
-        "$VENV_DIR/bin/python3" -c "
-from openwakeword import utils
-utils.download_models()
-print('  Models downloaded to default location')
-" 2>/dev/null || warn "Wake word model download failed — you can add it manually later"
-        ok "Wake word models ready (place custom hey_jarvis.onnx in $WAKEWORD_DIR/)"
+        echo "  Downloading hey_jarvis wake word model..."
+        # Try direct GitHub release first
+        wget -q --show-progress \
+            -O "$WAKEWORD_DIR/hey_jarvis.onnx" \
+            "https://github.com/dscripka/openWakeWord/releases/download/v0.1.1/hey_jarvis_v0.1.onnx" \
+            2>/dev/null \
+        || {
+            # Fallback: copy from installed openwakeword package resources
+            OWW_MODELS=$("$VENV_DIR/bin/python3" -c \
+                "import openwakeword, os; print(os.path.join(os.path.dirname(openwakeword.__file__), 'resources', 'models'))" \
+                2>/dev/null)
+            if [ -n "$OWW_MODELS" ]; then
+                MODEL_FILE=$(find "$OWW_MODELS" -name "*hey_jarvis*" -o -name "*jarvis*" 2>/dev/null | head -1)
+                if [ -n "$MODEL_FILE" ]; then
+                    cp "$MODEL_FILE" "$WAKEWORD_DIR/hey_jarvis.onnx"
+                    ok "hey_jarvis model copied from package: $MODEL_FILE"
+                else
+                    warn "hey_jarvis model not found — add $WAKEWORD_DIR/hey_jarvis.onnx manually"
+                fi
+            else
+                warn "Wake word model download failed — add $WAKEWORD_DIR/hey_jarvis.onnx manually"
+            fi
+        }
+        [ -f "$WAKEWORD_DIR/hey_jarvis.onnx" ] && ok "Wake word model ready at $WAKEWORD_DIR/hey_jarvis.onnx"
     else
         ok "Wake word model already exists"
     fi

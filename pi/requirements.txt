@@ -16,6 +16,7 @@ websockets>=12.0
 PyAudio>=0.2.14
 # openwakeword: installed separately in install_pi.sh using onnxruntime backend
 # (tflite-runtime is not available for Python 3.12+; install script handles this)
+scikit-learn>=1.3.0  # required by openwakeword custom_verifier_model
 piper-tts>=1.2.0
 
 # ── Vision ────────────────────────────────────────────────────────────
