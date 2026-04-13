@@ -36,14 +36,36 @@ class FaceTrigger(BaseTrigger):
 
     async def start(self) -> None:
         self._cascade = cv2.CascadeClassifier(_HAAR_CASCADE)
-        self._cap = cv2.VideoCapture(settings.CAMERA_DEVICE)
+
+        device = self._find_camera()
+        if device is None:
+            logger.error("No camera found for face trigger — retrying in 30s")
+            await asyncio.sleep(30)
+            return
+
+        self._cap = cv2.VideoCapture(device)
         self._cap.set(cv2.CAP_PROP_FRAME_WIDTH, settings.CAMERA_FRAME_WIDTH)
         self._cap.set(cv2.CAP_PROP_FRAME_HEIGHT, settings.CAMERA_FRAME_HEIGHT)
 
         if not self._cap.isOpened():
-            logger.error("Camera not available at %s — retrying in 30s", settings.CAMERA_DEVICE)
+            logger.error("Camera not available at %s — retrying in 30s", device)
             await asyncio.sleep(30)
             return
+
+    @staticmethod
+    def _find_camera() -> str | None:
+        candidates = [settings.CAMERA_DEVICE] + [f"/dev/video{i}" for i in range(5)]
+        seen = set()
+        for dev in candidates:
+            if dev in seen:
+                continue
+            seen.add(dev)
+            cap = cv2.VideoCapture(dev)
+            opened = cap.isOpened()
+            cap.release()
+            if opened:
+                return dev
+        return None
 
         self._running = True
         logger.info("Face trigger started (camera=%s)", settings.CAMERA_DEVICE)

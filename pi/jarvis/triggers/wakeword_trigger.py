@@ -34,10 +34,33 @@ class WakeWordTrigger(BaseTrigger):
 
     async def start(self) -> None:
         """Start wake word detection loop."""
-        from openwakeword.model import Model
+        import sys
+        from pathlib import Path
+
+        # Clear any previously broken/partial openwakeword module from cache
+        # (happens when sklearn is missing on first import)
+        for key in list(sys.modules.keys()):
+            if "openwakeword" in key:
+                del sys.modules[key]
+
+        model_path = Path(settings.WAKEWORD_MODEL_PATH)
+        if not model_path.exists():
+            logger.error(
+                "Wake word model not found: %s — run make install to download models",
+                model_path,
+            )
+            await asyncio.sleep(60)
+            return
+
+        try:
+            from openwakeword.model import Model
+        except ModuleNotFoundError as e:
+            logger.error("openwakeword import failed (%s) — install missing deps: pip install scikit-learn", e)
+            await asyncio.sleep(60)
+            return
 
         self._model = Model(
-            wakeword_models=[settings.WAKEWORD_MODEL_PATH],
+            wakeword_models=[str(model_path)],
             inference_framework="onnx",
         )
 

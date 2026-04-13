@@ -36,13 +36,33 @@ class CameraController:
         self._current_tilt = 0
 
     async def start(self) -> None:
-        self._cap = cv2.VideoCapture(settings.CAMERA_DEVICE)
+        device = self._find_camera()
+        if device is None:
+            logger.error("No camera found (tried %s and /dev/video0–4)", settings.CAMERA_DEVICE)
+            return
+        self._cap = cv2.VideoCapture(device)
         self._cap.set(cv2.CAP_PROP_FRAME_WIDTH, settings.CAMERA_FRAME_WIDTH)
         self._cap.set(cv2.CAP_PROP_FRAME_HEIGHT, settings.CAMERA_FRAME_HEIGHT)
         if not self._cap.isOpened():
-            logger.error("Camera not available at %s", settings.CAMERA_DEVICE)
+            logger.error("Camera not available at %s", device)
             return
-        logger.info("Camera controller started (%s)", settings.CAMERA_DEVICE)
+        logger.info("Camera controller started (%s)", device)
+
+    @staticmethod
+    def _find_camera() -> str | None:
+        """Try the configured device, then scan /dev/video0–4 for the first working camera."""
+        candidates = [settings.CAMERA_DEVICE] + [f"/dev/video{i}" for i in range(5)]
+        seen = set()
+        for dev in candidates:
+            if dev in seen:
+                continue
+            seen.add(dev)
+            cap = cv2.VideoCapture(dev)
+            opened = cap.isOpened()
+            cap.release()
+            if opened:
+                return dev
+        return None
 
     async def stop(self) -> None:
         if self._cap:
