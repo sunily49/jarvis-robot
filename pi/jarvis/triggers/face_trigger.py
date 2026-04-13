@@ -36,7 +36,7 @@ class FaceTrigger(BaseTrigger):
 
     @staticmethod
     def _find_camera() -> str | None:
-        candidates = [settings.CAMERA_DEVICE] + [f"/dev/video{i}" for i in range(10)]
+        candidates = [settings.CAMERA_DEVICE] + [f"/dev/video{i}" for i in [0, 1, 2, 4, 10, 19, 20]]
         seen: set[str] = set()
         for dev in candidates:
             if dev in seen:
