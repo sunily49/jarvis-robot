@@ -173,10 +173,16 @@ class UIManager:
         """Blocking pygame loop — runs entirely in the executor thread."""
         import pygame  # import here so main thread doesn't need pygame at import time
 
-        pygame.init()
-        flags = pygame.FULLSCREEN if self._fullscreen else 0
-        screen = pygame.display.set_mode((self._width, self._height), flags)
-        pygame.display.set_caption("JARVIS")
+        try:
+            pygame.init()
+            flags = pygame.FULLSCREEN if self._fullscreen else 0
+            screen = pygame.display.set_mode((self._width, self._height), flags)
+            pygame.display.set_caption("JARVIS")
+        except Exception as e:
+            log.warning("ui_manager.display_init_failed", error=str(e),
+                        hint="Set DISPLAY_ENABLED=false in .env if no screen is connected")
+            self._running = False
+            return
         clock = pygame.time.Clock()
         self._face = FaceRenderer(self._width, self._height)
 

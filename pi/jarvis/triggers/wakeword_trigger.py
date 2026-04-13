@@ -24,13 +24,16 @@ class WakeWordTrigger(BaseTrigger):
         self._model = None
         self._running = False
         self._chunk_queue: asyncio.Queue[np.ndarray] = asyncio.Queue(maxsize=50)
+        self._loop: asyncio.AbstractEventLoop | None = None
 
     def _on_audio_chunk(self, chunk: np.ndarray) -> None:
-        """Callback from AudioCapture — non-blocking put into queue."""
+        """Callback from AudioCapture thread — thread-safe schedule into event loop."""
+        if self._loop is None:
+            return
         try:
-            self._chunk_queue.put_nowait(chunk)
-        except asyncio.QueueFull:
-            pass  # Drop oldest if behind
+            self._loop.call_soon_threadsafe(self._chunk_queue.put_nowait, chunk)
+        except (RuntimeError, asyncio.QueueFull):
+            pass  # Loop closed or queue full — drop chunk
 
     async def start(self) -> None:
         """Start wake word detection loop."""
@@ -64,6 +67,7 @@ class WakeWordTrigger(BaseTrigger):
             inference_framework="onnx",
         )
 
+        self._loop = asyncio.get_running_loop()
         from jarvis.audio.capture import audio_capture
         audio_capture.add_subscriber(self._on_audio_chunk)
 
