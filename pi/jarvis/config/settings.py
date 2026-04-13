@@ -78,14 +78,24 @@ AUDIO_CHUNK_SIZE = _int("AUDIO_CHUNK_SIZE", 1024)
 
 # ── Wake Word ─────────────────────────────────────────────────────────
 def _wakeword_model_default() -> str:
-    """Return configured path, or auto-locate from openwakeword package resources."""
-    configured = os.getenv("WAKEWORD_MODEL_PATH", str(_HOME / "wakeword_models/hey_jarvis.onnx"))
-    if Path(configured).exists():
+    """Return configured path, or auto-locate from ~/wakeword_models/ or openwakeword package."""
+    import glob as _glob
+    configured = os.getenv("WAKEWORD_MODEL_PATH", "")
+
+    # 1. Explicit env var — use if it exists
+    if configured and Path(configured).exists():
         return configured
-    # Fall back to bundled model inside the installed openwakeword package
+
+    # 2. Scan ~/wakeword_models/ for any jarvis model (covers hey_jarvis_v0.1.onnx, etc.)
+    user_models_dir = _HOME / "wakeword_models"
+    for pattern in ("*hey_jarvis*.onnx", "*jarvis*.onnx"):
+        matches = sorted(_glob.glob(str(user_models_dir / pattern)))
+        if matches:
+            return matches[0]
+
+    # 3. Fall back to bundled model inside the installed openwakeword package
     try:
         import openwakeword as _oww
-        import glob as _glob
         pkg_models = Path(_oww.__file__).parent / "resources" / "models"
         for pattern in ("*hey_jarvis*", "*jarvis*"):
             matches = _glob.glob(str(pkg_models / pattern))
@@ -93,7 +103,9 @@ def _wakeword_model_default() -> str:
                 return matches[0]
     except Exception:
         pass
-    return configured  # Return original even if missing — wakeword_trigger handles the error
+
+    # 4. Return default path even if missing — wakeword_trigger handles the error
+    return str(user_models_dir / "hey_jarvis.onnx")
 
 WAKEWORD_MODEL_PATH = _wakeword_model_default()
 WAKEWORD_THRESHOLD = float(os.getenv("WAKEWORD_THRESHOLD", "0.4"))

@@ -38,10 +38,9 @@ class CameraController:
     async def start(self) -> None:
         device = self._find_camera()
         if device is None:
-            logger.error("No camera found (tried %s and /dev/video0–4)", settings.CAMERA_DEVICE)
+            logger.error("No camera found (tried indices 0–2 and /dev/video0–1)")
             return
-        self._cap = cv2.VideoCapture(device, cv2.CAP_V4L2)
-        self._cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
+        self._cap = cv2.VideoCapture(device)
         self._cap.set(cv2.CAP_PROP_FRAME_WIDTH, settings.CAMERA_FRAME_WIDTH)
         self._cap.set(cv2.CAP_PROP_FRAME_HEIGHT, settings.CAMERA_FRAME_HEIGHT)
         if not self._cap.isOpened():
@@ -50,14 +49,20 @@ class CameraController:
         logger.info("Camera controller started (%s)", device)
 
     @staticmethod
-    def _find_camera() -> str | None:
-        """Try the configured device, then scan /dev/video0–4 for the first working camera."""
-        candidates = [settings.CAMERA_DEVICE] + [f"/dev/video{i}" for i in [0, 1, 2, 4, 10, 19, 20]]
-        seen = set()
-        for dev in candidates:
-            if dev in seen:
-                continue
-            seen.add(dev)
+    def _find_camera() -> int | str | None:
+        """Try integer indices first (most compatible), then string paths with V4L2."""
+        # Integer indices work most reliably across backends (matches cv2.VideoCapture(0))
+        for idx in [0, 1, 2]:
+            cap = cv2.VideoCapture(idx)
+            if cap.isOpened():
+                ret, _ = cap.read()
+                cap.release()
+                if ret:
+                    logger.debug("Camera found at index %d", idx)
+                    return idx
+            cap.release()
+        # Fall back to explicit V4L2 string paths
+        for dev in [settings.CAMERA_DEVICE, "/dev/video0", "/dev/video1"]:
             cap = cv2.VideoCapture(dev, cv2.CAP_V4L2)
             if cap.isOpened():
                 cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
@@ -65,8 +70,7 @@ class CameraController:
                 cap.release()
                 if ret:
                     return dev
-            else:
-                cap.release()
+            cap.release()
         return None
 
     async def stop(self) -> None:

@@ -63,7 +63,7 @@ class WakeWordTrigger(BaseTrigger):
             return
 
         self._model = Model(
-            wakeword_models=[str(model_path)],
+            wakeword_model_paths=[str(model_path)],
             inference_framework="onnx",
         )
 
