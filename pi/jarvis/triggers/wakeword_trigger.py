@@ -74,12 +74,24 @@ class WakeWordTrigger(BaseTrigger):
         self._running = True
         logger.info("Wake word trigger started (threshold=%.2f)", settings.WAKEWORD_THRESHOLD)
 
+        _debug_log_interval = 50   # log scores every N chunks when DEBUG
+        _chunk_count = 0
+
         while self._running:
             try:
                 chunk = await asyncio.wait_for(self._chunk_queue.get(), timeout=1.0)
                 prediction = self._model.predict(chunk)
+                _chunk_count += 1
 
                 for model_name, score in prediction.items():
+                    # Always log non-trivial scores so we can tune the threshold
+                    if score > 0.1:
+                        logger.debug("Wake word score: %s=%.3f (threshold=%.2f)",
+                                     model_name, score, settings.WAKEWORD_THRESHOLD)
+                    elif _chunk_count % _debug_log_interval == 0:
+                        logger.debug("Wake word listening… chunk=%d, %s=%.4f",
+                                     _chunk_count, model_name, score)
+
                     if score >= settings.WAKEWORD_THRESHOLD:
                         logger.info("Wake word detected: %s (score=%.3f)", model_name, score)
                         await self.fire(confidence=score, data={"model": model_name})
