@@ -213,6 +213,8 @@ ok "Python dependencies installed"
 
 # Pi-specific GPIO packages (ignore errors on non-Pi)
 pip install RPi.GPIO -q 2>/dev/null && ok "RPi.GPIO installed" || warn "RPi.GPIO skipped"
+# gpiozero + lgpio: Pi 5 GPIO backend (RPi.GPIO doesn't support Pi 5)
+pip install gpiozero lgpio -q 2>/dev/null && ok "gpiozero + lgpio installed (Pi 5 GPIO backend)" || warn "gpiozero skipped"
 pip install adafruit-circuitpython-pca9685 adafruit-circuitpython-motor -q 2>/dev/null \
     && ok "Adafruit servo/motor libs installed" || warn "Adafruit libs skipped (enable HW_SERVOS to install later)"
 
