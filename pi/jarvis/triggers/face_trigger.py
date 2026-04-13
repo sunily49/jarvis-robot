@@ -34,6 +34,21 @@ class FaceTrigger(BaseTrigger):
         self._last_face_time = 0.0
         self._cooldown = 10.0  # Don't re-trigger for 10s after a face trigger
 
+    @staticmethod
+    def _find_camera() -> str | None:
+        candidates = [settings.CAMERA_DEVICE] + [f"/dev/video{i}" for i in range(5)]
+        seen: set[str] = set()
+        for dev in candidates:
+            if dev in seen:
+                continue
+            seen.add(dev)
+            cap = cv2.VideoCapture(dev)
+            opened = cap.isOpened()
+            cap.release()
+            if opened:
+                return dev
+        return None
+
     async def start(self) -> None:
         self._cascade = cv2.CascadeClassifier(_HAAR_CASCADE)
 
@@ -52,23 +67,8 @@ class FaceTrigger(BaseTrigger):
             await asyncio.sleep(30)
             return
 
-    @staticmethod
-    def _find_camera() -> str | None:
-        candidates = [settings.CAMERA_DEVICE] + [f"/dev/video{i}" for i in range(5)]
-        seen = set()
-        for dev in candidates:
-            if dev in seen:
-                continue
-            seen.add(dev)
-            cap = cv2.VideoCapture(dev)
-            opened = cap.isOpened()
-            cap.release()
-            if opened:
-                return dev
-        return None
-
         self._running = True
-        logger.info("Face trigger started (camera=%s)", settings.CAMERA_DEVICE)
+        logger.info("Face trigger started (camera=%s)", device)
 
         loop = asyncio.get_event_loop()
 
