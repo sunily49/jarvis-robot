@@ -8,6 +8,7 @@ Used for: system announcements, Ollama responses, Gemini Flash text responses.
 import asyncio
 import logging
 import subprocess
+import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -15,6 +16,13 @@ from jarvis.audio.playback import PlaybackPriority, audio_playback
 from jarvis.config import settings
 
 logger = logging.getLogger(__name__)
+
+# Locate piper binary: prefer venv/bin/piper, fall back to PATH
+def _find_piper() -> str:
+    venv_piper = Path(sys.executable).parent / "piper"
+    if venv_piper.exists():
+        return str(venv_piper)
+    return "piper"  # fallback to PATH
 
 
 class PiperTTS:
@@ -24,6 +32,7 @@ class PiperTTS:
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="tts")
         self._model_path = Path(settings.PIPER_MODEL_PATH)
         self._config_path = Path(settings.PIPER_CONFIG_PATH)
+        self._piper_bin = _find_piper()
 
     async def speak(
         self,
@@ -42,7 +51,7 @@ class PiperTTS:
         """Run Piper TTS subprocess to generate raw PCM audio."""
         try:
             cmd = [
-                "piper",
+                self._piper_bin,
                 "--model", str(self._model_path),
                 "--config", str(self._config_path),
                 "--output-raw",
