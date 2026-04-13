@@ -41,7 +41,8 @@ class FaceTrigger(BaseTrigger):
         self._cap.set(cv2.CAP_PROP_FRAME_HEIGHT, settings.CAMERA_FRAME_HEIGHT)
 
         if not self._cap.isOpened():
-            logger.error("Camera not available at %s", settings.CAMERA_DEVICE)
+            logger.error("Camera not available at %s — retrying in 30s", settings.CAMERA_DEVICE)
+            await asyncio.sleep(30)
             return
 
         self._running = True

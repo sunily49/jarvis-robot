@@ -142,6 +142,9 @@ class TriggerManager:
             except Exception:
                 logger.exception("Trigger '%s' crashed, restarting in 5s", trigger.name)
                 await asyncio.sleep(5)
+            if cls._running:
+                # Prevent tight spin-loop if start() returns immediately (e.g. hardware unavailable)
+                await asyncio.sleep(1)
 
     @classmethod
     def get_registered(cls) -> list[str]:
