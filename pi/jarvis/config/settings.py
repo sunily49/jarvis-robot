@@ -96,7 +96,7 @@ def _wakeword_model_default() -> str:
     return configured  # Return original even if missing — wakeword_trigger handles the error
 
 WAKEWORD_MODEL_PATH = _wakeword_model_default()
-WAKEWORD_THRESHOLD = float(os.getenv("WAKEWORD_THRESHOLD", "0.5"))
+WAKEWORD_THRESHOLD = float(os.getenv("WAKEWORD_THRESHOLD", "0.4"))
 
 # ── TTS ───────────────────────────────────────────────────────────────
 PIPER_MODEL_PATH = _str("PIPER_MODEL_PATH", str(_HOME / "piper_models/en_US-lessac-medium.onnx"))
