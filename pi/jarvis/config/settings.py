@@ -43,6 +43,8 @@ TRIGGER_TELEGRAM = _bool("TRIGGER_TELEGRAM", False)
 AI_GEMINI_LIVE = _bool("AI_GEMINI_LIVE", True)
 AI_GEMINI_FLASH = _bool("AI_GEMINI_FLASH", True)
 AI_OLLAMA_FALLBACK = _bool("AI_OLLAMA_FALLBACK", True)
+# Live model — override with GEMINI_LIVE_MODEL in .env if this changes
+GEMINI_LIVE_MODEL = _str("GEMINI_LIVE_MODEL", "gemini-3.1-flash-live-preview")
 
 # ── Vision (offloaded to server) ─────────────────────────────────────
 VISION_FACE_RECOGNITION = _bool("VISION_FACE_RECOGNITION", True)

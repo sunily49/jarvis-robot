@@ -16,7 +16,9 @@ from jarvis.core.event_bus import event_bus
 
 logger = logging.getLogger(__name__)
 
-GEMINI_LIVE_MODEL = "gemini-2.0-flash-live-preview"
+# Model resolved from settings (overridable via GEMINI_LIVE_MODEL in .env)
+def _get_model() -> str:
+    return settings.GEMINI_LIVE_MODEL
 
 
 class GeminiLiveClient:
@@ -87,11 +89,12 @@ class GeminiLiveClient:
         )
 
         try:
+            model_name = _get_model()
             async with client.aio.live.connect(
-                model=GEMINI_LIVE_MODEL,
+                model=model_name,
                 config=live_config,
             ) as session:
-                logger.info("Gemini Live session established (model=%s)", GEMINI_LIVE_MODEL)
+                logger.info("Gemini Live session established (model=%s)", model_name)
                 await event_bus.publish("session.state_changed", {"state": "LISTENING"})
 
                 loop = asyncio.get_running_loop()

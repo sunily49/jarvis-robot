@@ -211,6 +211,25 @@ fi
 
 ok "Python dependencies installed"
 
+# openwakeword support models (melspectrogram.onnx etc.) may be missing from piwheels wheel.
+# Copy them into ~/wakeword_models/ so they survive venv rebuilds.
+if python3 -c "import openwakeword" 2>/dev/null; then
+    OWW_RES=$("$VENV_DIR/bin/python3" -c \
+        "import openwakeword, os; print(os.path.join(os.path.dirname(openwakeword.__file__), 'resources', 'models'))" \
+        2>/dev/null)
+    if [ -n "$OWW_RES" ] && [ -d "$OWW_RES" ]; then
+        # Copy any .onnx support models that are missing from wakeword dir
+        for f in "$OWW_RES"/*.onnx; do
+            [ -f "$f" ] || continue
+            dest="$WAKEWORD_DIR/$(basename "$f")"
+            if [ ! -f "$dest" ]; then
+                cp "$f" "$dest"
+                ok "Copied support model: $(basename "$f") → $WAKEWORD_DIR/"
+            fi
+        done
+    fi
+fi
+
 # Pi-specific GPIO packages (ignore errors on non-Pi)
 pip install RPi.GPIO -q 2>/dev/null && ok "RPi.GPIO installed" || warn "RPi.GPIO skipped"
 # gpiozero + lgpio: Pi 5 GPIO backend (RPi.GPIO doesn't support Pi 5)
