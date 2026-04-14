@@ -42,12 +42,13 @@ TRIGGER_TELEGRAM = _bool("TRIGGER_TELEGRAM", False)
 # ── AI ────────────────────────────────────────────────────────────────
 AI_GEMINI_LIVE = _bool("AI_GEMINI_LIVE", True)
 AI_GEMINI_FLASH = _bool("AI_GEMINI_FLASH", True)
-AI_OLLAMA_FALLBACK = _bool("AI_OLLAMA_FALLBACK", True)
-# Live model — override with GEMINI_LIVE_MODEL in .env if this changes
+# Ollama fallback requires home server or local Ollama; off by default in Pi-only mode
+AI_OLLAMA_FALLBACK = _bool("AI_OLLAMA_FALLBACK", False)
+# Live model — override with GEMINI_LIVE_MODEL in .env if the model name changes
 GEMINI_LIVE_MODEL = _str("GEMINI_LIVE_MODEL", "gemini-3.1-flash-live-preview")
 
 # ── Vision (offloaded to server) ─────────────────────────────────────
-VISION_FACE_RECOGNITION = _bool("VISION_FACE_RECOGNITION", True)
+VISION_FACE_RECOGNITION = _bool("VISION_FACE_RECOGNITION", False)  # needs home server
 VISION_YOLO = _bool("VISION_YOLO", False)
 VISION_GESTURE = _bool("VISION_GESTURE", False)
 VISION_ANOMALY = _bool("VISION_ANOMALY", False)
@@ -67,7 +68,7 @@ HW_SERVOS = _bool("HW_SERVOS", False)
 HW_SENSORS = _bool("HW_SENSORS", False)
 
 # ── Server ────────────────────────────────────────────────────────────
-SERVER_ENABLED = _bool("SERVER_ENABLED", True)
+SERVER_ENABLED = _bool("SERVER_ENABLED", False)  # Pi-only mode by default
 SERVER_HOST = _str("SERVER_HOST", "jarvis-server.local")
 SERVER_PORT = _int("SERVER_PORT", 9000)
 SERVER_HEALTH_INTERVAL = _int("SERVER_HEALTH_INTERVAL", 30)  # seconds

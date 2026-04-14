@@ -416,13 +416,15 @@ progress "Setting up configuration..."
 
 if [ ! -f "$JARVIS_DIR/pi/.env" ]; then
     cp "$JARVIS_DIR/pi/.env.example" "$JARVIS_DIR/pi/.env"
-    ok "Created .env from template"
+    # Patch paths to use the actual username (template uses 'vedant' as example)
+    sed -i "s|/home/vedant/|/home/$USER/|g" "$JARVIS_DIR/pi/.env"
+    ok "Created .env from template (Pi-only mode defaults)"
     echo ""
-    echo -e "  ${YELLOW}${BOLD}ACTION REQUIRED:${NC} Edit your .env file:"
+    echo -e "  ${YELLOW}${BOLD}ACTION REQUIRED:${NC} Set your Gemini API key:"
     echo -e "  ${BOLD}nano $JARVIS_DIR/pi/.env${NC}"
     echo ""
-    echo "  At minimum, set:"
-    echo "    GEMINI_API_KEY=your_key_here"
+    echo "  Required: GEMINI_API_KEY=your_key_here"
+    echo "  Optional: set SERVER_ENABLED=true if you have a home server"
     echo ""
 else
     ok ".env already exists"
@@ -432,6 +434,13 @@ else
         warn "GEMINI_API_KEY is still the placeholder — edit .env before starting!"
     else
         ok "GEMINI_API_KEY appears to be set"
+    fi
+
+    # Migrate old SERVER_ENABLED=true to false if server host is the default placeholder
+    if grep -q "^SERVER_ENABLED=true" "$JARVIS_DIR/pi/.env" 2>/dev/null && \
+       grep -q "^SERVER_HOST=jarvis-server.local" "$JARVIS_DIR/pi/.env" 2>/dev/null; then
+        warn "SERVER_ENABLED=true but SERVER_HOST is default placeholder — server features disabled"
+        warn "Set SERVER_HOST to your actual server IP to enable, or set SERVER_ENABLED=false to suppress this"
     fi
 fi
 
@@ -463,6 +472,7 @@ StandardError=journal
 Environment="PYTHONUNBUFFERED=1"
 Environment="DISPLAY=:0"
 Environment="XAUTHORITY=/home/$USER/.Xauthority"
+Environment="SDL_AUDIODRIVER=dummy"
 EnvironmentFile=$JARVIS_DIR/pi/.env
 
 # Resource limits
