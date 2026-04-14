@@ -20,7 +20,7 @@ from jarvis.core.event_bus import event_bus
 logger = logging.getLogger(__name__)
 
 # Gemini Live API constants
-GEMINI_LIVE_MODEL = "gemini-2.0-flash-live"
+GEMINI_LIVE_MODEL = "gemini-2.0-flash-live-001"
 GEMINI_WS_URL = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent"
 
 

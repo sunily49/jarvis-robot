@@ -428,8 +428,8 @@ SERVICE_FILE="/etc/systemd/system/jarvis.service"
 sudo tee "$SERVICE_FILE" > /dev/null << EOF
 [Unit]
 Description=JARVIS Robot AI Assistant
-After=network-online.target sound.target
-Wants=network-online.target
+After=network-online.target sound.target graphical.target
+Wants=network-online.target graphical.target
 
 [Service]
 Type=simple
@@ -442,6 +442,8 @@ RestartSec=5
 StandardOutput=journal
 StandardError=journal
 Environment="PYTHONUNBUFFERED=1"
+Environment="DISPLAY=:0"
+Environment="XAUTHORITY=/home/$USER/.Xauthority"
 EnvironmentFile=$JARVIS_DIR/pi/.env
 
 # Resource limits
