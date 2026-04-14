@@ -171,10 +171,17 @@ class UIManager:
 
     def _run_loop(self) -> None:
         """Blocking pygame loop — runs entirely in the executor thread."""
+        import os
         import pygame  # import here so main thread doesn't need pygame at import time
+
+        # Disable pygame audio — JARVIS uses PyAudio for all audio I/O.
+        # Without this, pygame.init() grabs the ALSA device and causes
+        # constant underrun errors in PyAudio.
+        os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 
         try:
             pygame.init()
+            pygame.mixer.quit()  # belt-and-suspenders: release any audio resources
             flags = pygame.FULLSCREEN if self._fullscreen else 0
             screen = pygame.display.set_mode((self._width, self._height), flags)
             pygame.display.set_caption("JARVIS")

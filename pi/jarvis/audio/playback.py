@@ -117,13 +117,14 @@ class AudioPlayback:
                     pass
                 self._stream = None
 
-            # frames_per_buffer=4096 gives ALSA a larger buffer, preventing underruns
+            # frames_per_buffer=8192 gives ALSA ~370ms buffer at 22kHz, reducing
+            # underruns caused by Python scheduling jitter on a loaded Pi 5.
             self._stream = self._pa.open(
                 format=pyaudio.paInt16,
                 channels=1,
                 rate=sample_rate,
                 output=True,
-                frames_per_buffer=4096,
+                frames_per_buffer=8192,
             )
             self._stream_rate = sample_rate
             logger.debug("Opened output stream at %dHz (buf=4096)", sample_rate)
