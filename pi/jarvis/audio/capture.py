@@ -44,6 +44,13 @@ class AudioCapture:
         """Register a callback that receives every 16kHz chunk."""
         self._subscribers.append(callback)
 
+    def remove_subscriber(self, callback: Callable[[np.ndarray], None]) -> None:
+        """Unregister a previously added callback."""
+        try:
+            self._subscribers.remove(callback)
+        except ValueError:
+            pass
+
     async def start(self) -> None:
         """Start audio capture in a background thread."""
         if self._running:

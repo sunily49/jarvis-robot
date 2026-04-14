@@ -97,30 +97,69 @@ class GeminiLiveClient:
                 logger.info("Gemini Live session established (model=%s)", model_name)
                 await event_bus.publish("session.state_changed", {"state": "LISTENING"})
 
+                # Send an initial greeting so Gemini speaks first, letting the
+                # user know the session is active without them having to guess.
+                _greeting = "Hello!"
+                if trigger_data.get("source") == "face":
+                    _greeting = "Hello! I see you — how can I help?"
+                elif trigger_data.get("source") == "wakeword":
+                    _greeting = "Yes, how can I help you?"
+                try:
+                    await session.send_client_content(
+                        turns=[{"role": "user", "parts": [{"text": _greeting}]}],
+                        turn_complete=True,
+                    )
+                    logger.debug("Sent initial greeting: %s", _greeting)
+                except Exception:
+                    logger.debug("Initial greeting not sent (non-fatal)")
+
                 loop = asyncio.get_running_loop()
                 active = True
                 speaking = False
 
                 async def send_mic() -> None:
+                    """Stream mic audio to Gemini — one chunk per callback, no duplicates."""
                     nonlocal active
                     from jarvis.audio.capture import audio_capture
+
+                    _mic_queue: asyncio.Queue[bytes] = asyncio.Queue(maxsize=200)
+
+                    def _on_chunk(chunk) -> None:
+                        """Called from the audio capture thread — push into asyncio queue."""
+                        data = chunk.tobytes()
+                        def _put() -> None:
+                            try:
+                                _mic_queue.put_nowait(data)
+                            except asyncio.QueueFull:
+                                pass  # drop chunk rather than blocking
+                        try:
+                            loop.call_soon_threadsafe(_put)
+                        except RuntimeError:
+                            pass  # event loop closed
+
+                    audio_capture.add_subscriber(_on_chunk)
                     try:
                         while active:
-                            raw_bytes = audio_capture.get_raw_bytes(n_chunks=2)
-                            if raw_bytes:
-                                if not speaking:
-                                    await session.send_realtime_input(
-                                        audio=types.Blob(
-                                            data=raw_bytes,
-                                            mime_type="audio/pcm;rate=16000",
-                                        )
+                            try:
+                                raw_bytes = await asyncio.wait_for(
+                                    _mic_queue.get(), timeout=0.5
+                                )
+                            except asyncio.TimeoutError:
+                                continue
+                            if not speaking:
+                                await session.send_realtime_input(
+                                    audio=types.Blob(
+                                        data=raw_bytes,
+                                        mime_type="audio/pcm;rate=16000",
                                     )
-                            await asyncio.sleep(0.06)
+                                )
                     except asyncio.CancelledError:
                         pass
                     except Exception:
                         logger.exception("Mic send error")
                         active = False
+                    finally:
+                        audio_capture.remove_subscriber(_on_chunk)
 
                 async def send_camera() -> None:
                     nonlocal active
