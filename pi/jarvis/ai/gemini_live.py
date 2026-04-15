@@ -97,21 +97,16 @@ class GeminiLiveClient:
                 logger.info("Gemini Live session established (model=%s)", model_name)
                 await event_bus.publish("session.state_changed", {"state": "LISTENING"})
 
-                # Send an initial greeting so Gemini speaks first, letting the
-                # user know the session is active without them having to guess.
-                _greeting = "Hello!"
-                if trigger_data.get("source") == "face":
-                    _greeting = "Hello! I see you — how can I help?"
-                elif trigger_data.get("source") == "wakeword":
-                    _greeting = "Yes, how can I help you?"
+                # Play a local TTS chime so the user hears that the session is
+                # active — do NOT send send_client_content() here because mixing
+                # a text turn with streaming send_realtime_input() audio causes
+                # a 1007 "invalid argument" WebSocket close immediately.
                 try:
-                    await session.send_client_content(
-                        turns=[{"role": "user", "parts": [{"text": _greeting}]}],
-                        turn_complete=True,
-                    )
-                    logger.info("Initial greeting sent: %s", _greeting)
-                except Exception as _e:
-                    logger.info("Initial greeting skipped (%s) — waiting for user to speak", type(_e).__name__)
+                    from jarvis.audio.tts import tts
+                    _chime = "Yes?" if trigger_data.get("source") == "wakeword" else "Hello!"
+                    await tts.speak(_chime)
+                except Exception:
+                    pass  # non-fatal
 
                 loop = asyncio.get_running_loop()
                 active = True
