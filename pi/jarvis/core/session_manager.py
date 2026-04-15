@@ -29,7 +29,9 @@ from jarvis.core.event_bus import event_bus
 
 logger = logging.getLogger(__name__)
 
-_FACE_CONTEXT_TTL = 60.0  # seconds before face identification expires
+_FACE_CONTEXT_TTL  = 60.0   # seconds before face identification expires
+_VOICE_CONTEXT_TTL = 60.0   # seconds before voice identification expires
+_VOICE_ID_AUDIO_S  = 1.5    # seconds of audio to collect for voice ID at session start
 
 
 class SessionState(Enum):
@@ -50,9 +52,11 @@ class SessionManager:
         self._active_session: Any = None
         self._last_trigger_data: dict[str, Any] = {}
 
-        # Person context — populated by face.identified events
+        # Person context — populated by face.identified / voice.identified events
         self._last_identified_name: str | None = None
         self._last_identified_at: float = 0.0
+        self._last_voice_identified_name: str | None = None
+        self._last_voice_identified_at: float = 0.0
 
     @property
     def state(self) -> SessionState:
@@ -68,6 +72,7 @@ class SessionManager:
         """Set up event subscriptions."""
         await event_bus.subscribe("trigger.*", self._on_trigger)
         await event_bus.subscribe("face.identified", self._on_face_identified)
+        await event_bus.subscribe("voice.identified", self._on_voice_identified)
         await event_bus.subscribe("session.force_stop", self._on_force_stop)
         await event_bus.subscribe("network.mode_changed", self._on_network_mode_changed)
         logger.info("SessionManager initialized, listening for triggers")
@@ -95,7 +100,15 @@ class SessionManager:
         if name and confidence >= 0.5:
             self._last_identified_name = name
             self._last_identified_at = time.time()
-            logger.info("Person context cached: %s (conf=%.2f)", name, confidence)
+            logger.info("Face context cached: %s (conf=%.2f)", name, confidence)
+
+    async def _on_voice_identified(self, _event: str, data: dict[str, Any]) -> None:
+        name = data.get("name")
+        confidence = data.get("confidence", 0.0)
+        if name and confidence >= 0.5:
+            self._last_voice_identified_name = name
+            self._last_voice_identified_at = time.time()
+            logger.info("Voice context cached: %s (conf=%.2f)", name, confidence)
 
     async def _on_force_stop(self, _event: str, _data: dict[str, Any]) -> None:
         await self.force_stop()
@@ -155,6 +168,9 @@ class SessionManager:
         })
 
         person_name = self._get_person_context()
+        if not person_name:
+            person_name = await self._try_identify_by_voice()
+
         person_profile: dict | None = None
         if person_name:
             person_profile = await self._fetch_person_profile(person_name)
@@ -242,11 +258,65 @@ class SessionManager:
     # ── Person context ───────────────────────────────────────────────
 
     def _get_person_context(self) -> str | None:
-        if not self._last_identified_name:
-            return None
-        if time.time() - self._last_identified_at > _FACE_CONTEXT_TTL:
-            return None
-        return self._last_identified_name
+        """Return the most recently identified person name within TTL. Face takes priority."""
+        now = time.time()
+        face_name = (
+            self._last_identified_name
+            if self._last_identified_name and now - self._last_identified_at <= _FACE_CONTEXT_TTL
+            else None
+        )
+        voice_name = (
+            self._last_voice_identified_name
+            if self._last_voice_identified_name and now - self._last_voice_identified_at <= _VOICE_CONTEXT_TTL
+            else None
+        )
+        return face_name or voice_name
+
+    async def _try_identify_by_voice(self) -> str | None:
+        """
+        Collect _VOICE_ID_AUDIO_S seconds of mic audio and ask the server to identify
+        the speaker. Called at session start when no face context is available.
+        Returns the identified name, or None if identification fails or is below threshold.
+        """
+        try:
+            from jarvis.core.server_client import server_client
+            if not server_client.server_available:
+                return None
+
+            from jarvis.audio.capture import audio_capture
+
+            chunks: list[bytes] = []
+
+            def _collect(chunk) -> None:
+                chunks.append(chunk if isinstance(chunk, bytes) else chunk.tobytes())
+
+            audio_capture.add_subscriber(_collect)
+            try:
+                await asyncio.sleep(_VOICE_ID_AUDIO_S)
+            finally:
+                audio_capture.remove_subscriber(_collect)
+
+            if not chunks:
+                return None
+
+            result = await asyncio.wait_for(
+                server_client.identify_voice(b"".join(chunks)),
+                timeout=2.0,
+            )
+            if result and result.get("name") and result.get("confidence", 0.0) >= 0.5:
+                name = result["name"]
+                confidence = float(result["confidence"])
+                self._last_voice_identified_name = name
+                self._last_voice_identified_at = time.time()
+                await event_bus.publish("voice.identified", {"name": name, "confidence": confidence})
+                logger.info("Voice identified at session start: %s (conf=%.2f)", name, confidence)
+                return name
+
+        except asyncio.TimeoutError:
+            logger.debug("Voice identification timed out at session start")
+        except Exception:
+            logger.debug("Voice identification failed at session start", exc_info=True)
+        return None
 
     async def _fetch_person_profile(self, name: str) -> dict | None:
         try:

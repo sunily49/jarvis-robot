@@ -124,7 +124,12 @@ async def identify_current_speaker() -> dict:
     audio_bytes = b"".join(chunks)
     result = await server_client.identify_voice(audio_bytes)
     if result and result.get("name"):
-        return {"name": result["name"], "confidence": result["confidence"]}
+        name = result["name"]
+        confidence = result.get("confidence", 0.0)
+        # Publish so SessionManager updates person context for this session
+        from jarvis.core.event_bus import event_bus
+        await event_bus.publish("voice.identified", {"name": name, "confidence": confidence})
+        return {"name": name, "confidence": confidence}
     return {"name": None, "confidence": result.get("confidence", 0.0) if result else 0.0}
 
 
