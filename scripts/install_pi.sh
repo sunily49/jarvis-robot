@@ -129,7 +129,7 @@ PACKAGES_REQUIRED=(
     v4l-utils
     alsa-utils
     cmake build-essential
-    git wget curl
+    git wget curl unzip
     libffi-dev libssl-dev
 )
 
@@ -405,6 +405,23 @@ else
         ok "Piper TTS model downloaded"
     else
         ok "Piper TTS model already exists"
+    fi
+
+    # Vosk offline STT model (45 MB, used in LOCAL/OFFLINE mode when no internet)
+    VOSK_DIR="$HOME/vosk_models"
+    VOSK_MODEL_DIR="$VOSK_DIR/vosk-model-small-en-us-0.15"
+    mkdir -p "$VOSK_DIR"
+    if [ ! -d "$VOSK_MODEL_DIR" ]; then
+        echo "  Downloading Vosk STT model (vosk-model-small-en-us-0.15, ~45MB)..."
+        VOSK_URL="https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip"
+        VOSK_ZIP="$VOSK_DIR/vosk-model-small-en-us-0.15.zip"
+        wget -q --show-progress -O "$VOSK_ZIP" "$VOSK_URL" \
+            && unzip -q "$VOSK_ZIP" -d "$VOSK_DIR" \
+            && rm -f "$VOSK_ZIP" \
+            && ok "Vosk STT model downloaded to $VOSK_MODEL_DIR" \
+            || warn "Vosk model download failed — offline STT will be disabled (re-run make install to retry)"
+    else
+        ok "Vosk STT model already exists"
     fi
 fi
 

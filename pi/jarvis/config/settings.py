@@ -1,6 +1,11 @@
 """
 JARVIS Configuration — loads all settings from .env with sensible defaults.
 Every trigger, tool, and feature is gated by a boolean flag.
+
+Network modes (selected automatically by NetworkMonitor):
+  FULL_CLOUD   — WiFi + internet → Gemini Live (primary)
+  LOCAL_SERVER — WiFi only       → Ollama via server or Pi-local
+  OFFLINE      — No network      → local Ollama + Piper TTS only
 """
 
 import os
@@ -42,10 +47,29 @@ TRIGGER_TELEGRAM = _bool("TRIGGER_TELEGRAM", False)
 # ── AI ────────────────────────────────────────────────────────────────
 AI_GEMINI_LIVE = _bool("AI_GEMINI_LIVE", True)
 AI_GEMINI_FLASH = _bool("AI_GEMINI_FLASH", True)
-# Ollama fallback requires home server or local Ollama; off by default in Pi-only mode
-AI_OLLAMA_FALLBACK = _bool("AI_OLLAMA_FALLBACK", False)
-# Live model — override with GEMINI_LIVE_MODEL in .env if the model name changes
-GEMINI_LIVE_MODEL = _str("GEMINI_LIVE_MODEL", "gemini-3.1-flash-live-preview")
+# Ollama is used in LOCAL_SERVER / OFFLINE modes; needs server or local install
+AI_OLLAMA_FALLBACK = _bool("AI_OLLAMA_FALLBACK", True)
+# Live model — override with GEMINI_LIVE_MODEL in .env if the name changes
+GEMINI_LIVE_MODEL = _str("GEMINI_LIVE_MODEL", "gemini-2.0-flash-live-001")
+
+# ── Network monitoring ────────────────────────────────────────────────
+# Ping host used to verify internet; change to router IP for LAN-only check
+NETWORK_PING_HOST = _str("NETWORK_PING_HOST", "8.8.8.8")
+# How often to re-check connectivity (seconds)
+NETWORK_CHECK_INTERVAL = _int("NETWORK_CHECK_INTERVAL", 30)
+# Consecutive failures before dropping from FULL_CLOUD (hysteresis)
+NETWORK_FAIL_THRESHOLD = _int("NETWORK_FAIL_THRESHOLD", 2)
+
+# ── Offline STT (Vosk — used in LOCAL_SERVER / OFFLINE modes) ────────
+OFFLINE_STT_ENABLED = _bool("OFFLINE_STT_ENABLED", True)
+OFFLINE_STT_MODEL = _str(
+    "OFFLINE_STT_MODEL",
+    str(_HOME / "vosk_models/vosk-model-small-en-us-0.15"),
+)
+# Max seconds to record per utterance before sending to STT
+OFFLINE_MAX_UTTERANCE_S = _int("OFFLINE_MAX_UTTERANCE_S", 10)
+# Max conversation turns per local session before returning to IDLE
+OFFLINE_MAX_TURNS = _int("OFFLINE_MAX_TURNS", 5)
 
 # ── Vision (offloaded to server) ─────────────────────────────────────
 VISION_FACE_RECOGNITION = _bool("VISION_FACE_RECOGNITION", False)  # needs home server
@@ -67,8 +91,9 @@ HW_MOTORS = _bool("HW_MOTORS", False)
 HW_SERVOS = _bool("HW_SERVOS", False)
 HW_SENSORS = _bool("HW_SENSORS", False)
 
-# ── Server ────────────────────────────────────────────────────────────
-SERVER_ENABLED = _bool("SERVER_ENABLED", False)  # Pi-only mode by default
+# ── Server (Pi + Server mode) ─────────────────────────────────────────
+# Set SERVER_ENABLED=true when a home server is running jarvis-server.
+SERVER_ENABLED = _bool("SERVER_ENABLED", False)
 SERVER_HOST = _str("SERVER_HOST", "jarvis-server.local")
 SERVER_PORT = _int("SERVER_PORT", 9000)
 SERVER_HEALTH_INTERVAL = _int("SERVER_HEALTH_INTERVAL", 30)  # seconds

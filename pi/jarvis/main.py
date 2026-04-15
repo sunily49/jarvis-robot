@@ -124,6 +124,10 @@ async def startup() -> None:
     # Start server client (health monitoring)
     await server_client.start()
 
+    # Start network monitor (selects AI backend: Gemini / local / offline)
+    from jarvis.core.network_monitor import network_monitor
+    await network_monitor.start()
+
     # Initialize memory
     await conversation_memory.initialize()
 
@@ -218,6 +222,9 @@ async def shutdown(session_mgr=None) -> None:
     await audio_capture.stop()
     await audio_playback.stop()
     await server_client.stop()
+
+    from jarvis.core.network_monitor import network_monitor
+    await network_monitor.stop()
     await conversation_memory.close()
 
     if settings.TOOL_CAMERA_PTZ:
