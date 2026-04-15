@@ -1,25 +1,35 @@
 """
 Face Recognition Service — identifies faces from JPEG frames.
 
-Uses face_recognition library (dlib-based). Stores known face encodings in faces.pkl.
+Backend is selected via FACE_RECOGNIZER_BACKEND env var (default "auto"):
+  insightface — InsightFace ArcFace ONNX (preferred, 99.83% LFW)
+  dlib        — face_recognition / dlib HOG (fallback, 99.38% LFW)
+
+Stores known face encodings in faces.pkl alongside the backend name.
+If the pkl was saved with a different backend, a warning is logged and
+re-enrollment is recommended (embeddings live in incompatible spaces).
 """
 
 import logging
+import os
 import pickle
 from pathlib import Path
 
 import cv2
-import face_recognition
 import numpy as np
+
+from services.face_recognizer import create_face_recognizer
 
 logger = logging.getLogger(__name__)
 
 FACES_DB = Path(__file__).parent.parent / "data" / "faces.pkl"
-TOLERANCE = 0.5
 
 
 class FaceService:
     def __init__(self) -> None:
+        self._recognizer = create_face_recognizer(
+            os.getenv("FACE_RECOGNIZER_BACKEND", "auto")
+        )
         self._known_encodings: list[np.ndarray] = []
         self._known_names: list[str] = []
         self._load_faces()
@@ -28,9 +38,17 @@ class FaceService:
         if FACES_DB.exists():
             with open(FACES_DB, "rb") as f:
                 data = pickle.load(f)
+            saved_backend = data.get("backend", "unknown")
+            active_backend = type(self._recognizer).__name__
+            if saved_backend != active_backend:
+                logger.warning(
+                    "faces.pkl was saved with %s but active backend is %s. "
+                    "Embeddings may be incompatible — consider re-enrolling faces.",
+                    saved_backend, active_backend,
+                )
             self._known_encodings = data.get("encodings", [])
             self._known_names = data.get("names", [])
-            logger.info("Loaded %d known faces", len(self._known_names))
+            logger.info("Loaded %d known faces (backend=%s)", len(self._known_names), saved_backend)
         else:
             logger.info("No faces.pkl found — starting fresh at %s", FACES_DB)
 
@@ -40,6 +58,7 @@ class FaceService:
             pickle.dump({
                 "encodings": self._known_encodings,
                 "names": self._known_names,
+                "backend": type(self._recognizer).__name__,
             }, f)
 
     def identify(self, jpeg_bytes: bytes) -> list[dict]:
@@ -50,30 +69,19 @@ class FaceService:
             return []
 
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-
-        # Detect and encode faces
-        locations = face_recognition.face_locations(rgb, model="hog")
-        encodings = face_recognition.face_encodings(rgb, locations)
+        face_encodings = self._recognizer.encode(rgb)
 
         results = []
-        for encoding, location in zip(encodings, locations):
-            name = "Unknown"
-            confidence = 0.0
-
-            if self._known_encodings:
-                distances = face_recognition.face_distance(self._known_encodings, encoding)
-                best_idx = int(np.argmin(distances))
-                best_distance = distances[best_idx]
-
-                if best_distance < TOLERANCE:
-                    name = self._known_names[best_idx]
-                    confidence = round(1.0 - best_distance, 3)
-
-            top, right, bottom, left = location
+        for face_enc in face_encodings:
+            match = self._recognizer.match(
+                face_enc.embedding,
+                self._known_encodings,
+                self._known_names,
+            )
             results.append({
-                "name": name,
-                "confidence": confidence,
-                "location": {"top": top, "right": right, "bottom": bottom, "left": left},
+                "name": match["name"] or "Unknown",
+                "confidence": match["confidence"],
+                "location": face_enc.bbox,
             })
 
         return results
@@ -86,13 +94,13 @@ class FaceService:
             return False
 
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        encodings = face_recognition.face_encodings(rgb)
+        face_encodings = self._recognizer.encode(rgb)
 
-        if not encodings:
+        if not face_encodings:
             logger.warning("No face found in image for registration")
             return False
 
-        self._known_encodings.append(encodings[0])
+        self._known_encodings.append(face_encodings[0].embedding)
         self._known_names.append(name)
         self._save_faces()
         logger.info("Registered face: %s (total: %d)", name, len(self._known_names))

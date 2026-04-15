@@ -23,6 +23,11 @@ piper-tts>=1.2.0
 
 # ── Vision ────────────────────────────────────────────────────────────
 opencv-python-headless>=4.9.0
+mediapipe>=0.10.0              # BlazeFace face detector (preferred over Haar)
+
+# ── VAD ───────────────────────────────────────────────────────────────
+# torch is optional; if absent, EnergyVAD fallback is used automatically
+torch>=2.0.0                   # Silero VAD (neural, noise-robust)
 
 # ── Networking ────────────────────────────────────────────────────────
 aiohttp>=3.9.0

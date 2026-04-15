@@ -1,40 +1,57 @@
 """
 Voice Enrollment Service — speaker identification via voice embeddings.
 
-Uses resemblyzer (d-vector) for speaker embeddings. Stores known voiceprints
-in voices.pkl alongside face encodings.
+Backend is selected via SPEAKER_ENCODER_BACKEND env var (default "auto"):
+  ecapa_tdnn  — SpeechBrain ECAPA-TDNN (preferred, ~0.8% EER)
+  resemblyzer — Resemblyzer d-vector (fallback, ~5% EER)
+
+Stores known voice embeddings in voices.pkl alongside the backend name.
+If the pkl was saved with a different backend, a warning is logged and
+re-enrollment is recommended (embeddings live in incompatible spaces).
 
 Flow:
 1. Enroll: capture audio → extract embedding → store with name
-2. Identify: audio chunk → extract embedding → cosine similarity against known voices
+2. Identify: audio chunk → extract embedding → similarity against known voices
 """
 
 import logging
+import os
 import pickle
 from pathlib import Path
 
 import numpy as np
 
+from services.speaker_encoder import create_speaker_encoder
+
 logger = logging.getLogger(__name__)
 
 VOICES_DB = Path(__file__).parent.parent / "data" / "voices.pkl"
-SIMILARITY_THRESHOLD = 0.75  # cosine similarity threshold for match
 
 
 class VoiceService:
     def __init__(self) -> None:
+        self._encoder = create_speaker_encoder(
+            os.getenv("SPEAKER_ENCODER_BACKEND", "auto")
+        )
         self._known_embeddings: list[np.ndarray] = []
         self._known_names: list[str] = []
-        self._encoder = None  # lazy-loaded
         self._load_voices()
 
     def _load_voices(self) -> None:
         if VOICES_DB.exists():
             with open(VOICES_DB, "rb") as f:
                 data = pickle.load(f)
+            saved_backend = data.get("backend", "unknown")
+            active_backend = type(self._encoder).__name__
+            if saved_backend != active_backend:
+                logger.warning(
+                    "voices.pkl was saved with %s but active backend is %s. "
+                    "Embeddings may be incompatible — consider re-enrolling voices.",
+                    saved_backend, active_backend,
+                )
             self._known_embeddings = data.get("embeddings", [])
             self._known_names = data.get("names", [])
-            logger.info("Loaded %d known voices", len(self._known_names))
+            logger.info("Loaded %d known voices (backend=%s)", len(self._known_names), saved_backend)
         else:
             logger.info("No voices.pkl found — starting fresh at %s", VOICES_DB)
 
@@ -44,31 +61,15 @@ class VoiceService:
             pickle.dump({
                 "embeddings": self._known_embeddings,
                 "names": self._known_names,
+                "backend": type(self._encoder).__name__,
             }, f)
-
-    def _get_encoder(self):
-        """Lazy-load the voice encoder to avoid slow startup."""
-        if self._encoder is None:
-            from resemblyzer import VoiceEncoder
-            self._encoder = VoiceEncoder()
-            logger.info("Voice encoder loaded")
-        return self._encoder
-
-    def _embed(self, audio_pcm: np.ndarray, sample_rate: int = 16000) -> np.ndarray | None:
-        """Extract a d-vector embedding from PCM audio."""
-        from resemblyzer import preprocess_wav
-        # preprocess_wav expects float32 in [-1, 1]
-        if audio_pcm.dtype != np.float32:
-            audio_pcm = audio_pcm.astype(np.float32) / 32768.0
-        wav = preprocess_wav(audio_pcm, source_sr=sample_rate)
-        if len(wav) < sample_rate:  # need at least 1 second
-            return None
-        encoder = self._get_encoder()
-        return encoder.embed_utterance(wav)
 
     def enroll(self, name: str, audio_pcm: np.ndarray, sample_rate: int = 16000) -> bool:
         """Enroll a speaker by name from PCM audio (at least 3-5 seconds recommended)."""
-        embedding = self._embed(audio_pcm, sample_rate)
+        if audio_pcm.dtype != np.float32:
+            audio_pcm = audio_pcm.astype(np.float32) / 32768.0
+
+        embedding = self._encoder.embed(audio_pcm, sample_rate)
         if embedding is None:
             logger.warning("Audio too short for voice enrollment")
             return False
@@ -76,11 +77,9 @@ class VoiceService:
         # Check if name already exists — update with averaged embedding
         for i, existing_name in enumerate(self._known_names):
             if existing_name.lower() == name.lower():
-                # Average with existing embedding for better accuracy
-                self._known_embeddings[i] = (
-                    self._known_embeddings[i] + embedding
-                ) / 2.0
-                self._known_embeddings[i] /= np.linalg.norm(self._known_embeddings[i])
+                averaged = (self._known_embeddings[i] + embedding) / 2.0
+                norm = np.linalg.norm(averaged)
+                self._known_embeddings[i] = averaged / norm if norm > 0 else averaged
                 self._save_voices()
                 logger.info("Updated voice profile: %s", name)
                 return True
@@ -93,28 +92,14 @@ class VoiceService:
 
     def identify(self, audio_pcm: np.ndarray, sample_rate: int = 16000) -> dict:
         """Identify a speaker from PCM audio. Returns {name, confidence}."""
-        embedding = self._embed(audio_pcm, sample_rate)
+        if audio_pcm.dtype != np.float32:
+            audio_pcm = audio_pcm.astype(np.float32) / 32768.0
+
+        embedding = self._encoder.embed(audio_pcm, sample_rate)
         if embedding is None:
             return {"name": None, "confidence": 0.0}
 
-        if not self._known_embeddings:
-            return {"name": None, "confidence": 0.0}
-
-        # Cosine similarity against all known voices
-        similarities = [
-            float(np.dot(embedding, known) / (np.linalg.norm(embedding) * np.linalg.norm(known)))
-            for known in self._known_embeddings
-        ]
-
-        best_idx = int(np.argmax(similarities))
-        best_sim = similarities[best_idx]
-
-        if best_sim >= SIMILARITY_THRESHOLD:
-            return {
-                "name": self._known_names[best_idx],
-                "confidence": round(best_sim, 3),
-            }
-        return {"name": None, "confidence": round(best_sim, 3)}
+        return self._encoder.match(embedding, self._known_embeddings, self._known_names)
 
     def list_enrolled(self) -> list[str]:
         """Return list of enrolled speaker names."""

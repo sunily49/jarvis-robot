@@ -30,15 +30,15 @@ from typing import Any
 
 import numpy as np
 
+from jarvis.audio.vad import create_vad
 from jarvis.config import settings
 from jarvis.core.event_bus import event_bus
 
 logger = logging.getLogger(__name__)
 
 # VAD tuning
-_SPEECH_ENERGY_THRESHOLD = 400   # int16 RMS above this = speech
-_SILENCE_CHUNKS = 24             # ~0.75s of silence ends utterance (32ms chunks)
-_MIN_SPEECH_CHUNKS = 4           # ignore utterances shorter than ~125ms
+_SILENCE_CHUNKS = 24   # ~0.75s of silence ends utterance (32ms chunks)
+_MIN_SPEECH_CHUNKS = 4  # ignore utterances shorter than ~125ms
 
 _SYSTEM_PROMPT = (
     "You are JARVIS, an AI robot assistant running locally on a Raspberry Pi 5. "
@@ -58,6 +58,13 @@ class LocalSession:
         self._running = False
         self._vosk_model = None      # loaded lazily
         self._vosk_rec = None
+        self._vad = None             # loaded lazily
+
+    def _get_vad(self):
+        if self._vad is None:
+            self._vad = create_vad(settings.VAD_BACKEND)
+            logger.info("VAD loaded: %s", self._vad)
+        return self._vad
 
     # ── Public API (same signature as GeminiLiveClient) ───────────────
 
@@ -146,6 +153,9 @@ class LocalSession:
 
         audio_capture.add_subscriber(_on_chunk)
 
+        vad = self._get_vad()
+        vad.reset()
+
         collected: list[bytes] = []
         silence_count = 0
         speech_count = 0
@@ -163,9 +173,8 @@ class LocalSession:
                     continue
 
                 samples = np.frombuffer(raw, dtype=np.int16)
-                rms = int(np.sqrt(np.mean(samples.astype(np.float32) ** 2)))
 
-                if rms >= _SPEECH_ENERGY_THRESHOLD:
+                if vad.is_speech(samples):
                     collected.append(raw)
                     speech_count += 1
                     silence_count = 0

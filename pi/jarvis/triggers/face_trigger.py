@@ -18,10 +18,9 @@ import numpy as np
 
 from jarvis.config import settings
 from jarvis.core.trigger_manager import BaseTrigger, TriggerPriority
+from jarvis.vision.face_detector import create_face_detector
 
 logger = logging.getLogger(__name__)
-
-_HAAR_CASCADE = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
 
 
 class FaceTrigger(BaseTrigger):
@@ -31,7 +30,7 @@ class FaceTrigger(BaseTrigger):
     def __init__(self) -> None:
         self._running = False
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="face")
-        self._cascade = None
+        self._detector = None
         self._face_present = False
         self._last_face_time = 0.0
         self._cooldown = 10.0  # Don't re-trigger for 10s after a face trigger
@@ -39,7 +38,7 @@ class FaceTrigger(BaseTrigger):
     async def start(self) -> None:
         from jarvis.vision.camera_controller import camera_controller
 
-        self._cascade = cv2.CascadeClassifier(_HAAR_CASCADE)
+        self._detector = create_face_detector(settings.FACE_DETECTOR_BACKEND)
 
         # Wait up to 10s for camera_controller to open the camera
         for _ in range(10):
@@ -89,18 +88,12 @@ class FaceTrigger(BaseTrigger):
                 logger.exception("Face trigger error")
                 await asyncio.sleep(1.0)
 
-    def _detect_faces_in_frame(self, frame: np.ndarray) -> np.ndarray | None:
+    def _detect_faces_in_frame(self, frame: np.ndarray) -> list:
         """Blocking face detection on a pre-captured frame (runs in thread)."""
         try:
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            return self._cascade.detectMultiScale(
-                gray,
-                scaleFactor=1.2,
-                minNeighbors=5,
-                minSize=(60, 60),
-            )
+            return self._detector.detect(frame)
         except Exception:
-            return None
+            return []
 
     async def _try_identify(self, frame: np.ndarray) -> None:
         """Send face crop to server for identification if available."""
@@ -134,6 +127,8 @@ class FaceTrigger(BaseTrigger):
     async def stop(self) -> None:
         self._running = False
         self._executor.shutdown(wait=False)
+        if self._detector is not None:
+            self._detector.close()
         logger.info("Face trigger stopped")
 
 

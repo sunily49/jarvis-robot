@@ -71,6 +71,10 @@ OFFLINE_MAX_UTTERANCE_S = _int("OFFLINE_MAX_UTTERANCE_S", 10)
 # Max conversation turns per local session before returning to IDLE
 OFFLINE_MAX_TURNS = _int("OFFLINE_MAX_TURNS", 5)
 
+# ── Recognition backends ──────────────────────────────────────────────
+FACE_DETECTOR_BACKEND = _str("FACE_DETECTOR_BACKEND", "auto")  # mediapipe|haar|auto
+VAD_BACKEND           = _str("VAD_BACKEND",           "auto")  # silero|energy|auto
+
 # ── Vision (offloaded to server) ─────────────────────────────────────
 VISION_FACE_RECOGNITION = _bool("VISION_FACE_RECOGNITION", False)  # needs home server
 VISION_YOLO = _bool("VISION_YOLO", False)
