@@ -50,7 +50,7 @@ AI_GEMINI_FLASH = _bool("AI_GEMINI_FLASH", True)
 # Ollama is used in LOCAL_SERVER / OFFLINE modes; needs server or local install
 AI_OLLAMA_FALLBACK = _bool("AI_OLLAMA_FALLBACK", True)
 # Live model — override with GEMINI_LIVE_MODEL in .env if the name changes
-GEMINI_LIVE_MODEL = _str("GEMINI_LIVE_MODEL", "gemini-2.0-flash-live-001")
+GEMINI_LIVE_MODEL = _str("GEMINI_LIVE_MODEL", "gemini-3.1-flash-live-preview")
 
 # ── Network monitoring ────────────────────────────────────────────────
 # Ping host used to verify internet; change to router IP for LAN-only check
