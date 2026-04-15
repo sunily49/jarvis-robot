@@ -101,6 +101,17 @@ class VoiceService:
 
         return self._encoder.match(embedding, self._known_embeddings, self._known_names)
 
+    def rename(self, old_name: str, new_name: str) -> int:
+        """Rename all voice embeddings from old_name to new_name. Returns count updated."""
+        count = 0
+        for i, name in enumerate(self._known_names):
+            if name.lower() == old_name.lower():
+                self._known_names[i] = new_name
+                count += 1
+        if count:
+            self._save_voices()
+        return count
+
     def list_enrolled(self) -> list[str]:
         """Return list of enrolled speaker names."""
         return list(set(self._known_names))

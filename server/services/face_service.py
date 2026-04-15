@@ -86,6 +86,21 @@ class FaceService:
 
         return results
 
+    def list_registered(self) -> list[str]:
+        """Return unique registered face names in insertion order."""
+        return list(dict.fromkeys(self._known_names))
+
+    def rename(self, old_name: str, new_name: str) -> int:
+        """Rename all face encodings from old_name to new_name. Returns count updated."""
+        count = 0
+        for i, name in enumerate(self._known_names):
+            if name.lower() == old_name.lower():
+                self._known_names[i] = new_name
+                count += 1
+        if count:
+            self._save_faces()
+        return count
+
     def register_face(self, name: str, jpeg_bytes: bytes) -> bool:
         """Register a new face from a JPEG image."""
         img_array = np.frombuffer(jpeg_bytes, dtype=np.uint8)

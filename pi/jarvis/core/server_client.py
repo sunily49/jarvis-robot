@@ -254,6 +254,35 @@ class ServerClient:
         except (aiohttp.ClientError, asyncio.TimeoutError):
             return None
 
+    async def list_registered(self) -> list[dict] | None:
+        """List all registered persons with face/voice modality flags."""
+        if not self._server_available or not self._session:
+            return None
+        try:
+            async with self._session.get(f"{self.base_url}/persons/registered") as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    return data.get("persons", [])
+                return None
+        except (aiohttp.ClientError, asyncio.TimeoutError):
+            return None
+
+    async def rename_person(self, old_name: str, new_name: str) -> dict | None:
+        """Rename a person across all server stores. Returns result dict or None."""
+        if not self._server_available or not self._session:
+            return None
+        try:
+            async with self._session.post(
+                f"{self.base_url}/person/{old_name}/rename",
+                json={"new_name": new_name},
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as resp:
+                if resp.status == 200:
+                    return await resp.json()
+                return None
+        except (aiohttp.ClientError, asyncio.TimeoutError):
+            return None
+
     async def record_encounter(self, name: str) -> None:
         """Record that a person was seen."""
         if not self._server_available or not self._session:

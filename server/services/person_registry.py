@@ -105,6 +105,19 @@ class PersonRegistry:
         """List all registered persons."""
         return list(self._persons.values())
 
+    def rename(self, old_name: str, new_name: str) -> bool:
+        """Rename a person in the registry (all profile data preserved)."""
+        old_key = old_name.lower()
+        new_key = new_name.lower()
+        if old_key not in self._persons:
+            return False
+        person = self._persons.pop(old_key)
+        person["name"] = new_name
+        self._persons[new_key] = person
+        self._save()
+        logger.info("Renamed person in registry: %r → %r", old_name, new_name)
+        return True
+
     def remove(self, name: str) -> bool:
         """Remove a person from the registry."""
         key = name.lower()

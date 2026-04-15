@@ -157,6 +157,85 @@ async def identify_person_in_view() -> dict:
 
 
 @mcp_tool(
+    name="list_registered_faces",
+    description="List everyone the robot knows — people with a registered face, voice, or both. Use this to answer 'who do you know?' or before renaming someone.",
+    parameters={"type": "object", "properties": {}},
+)
+async def list_registered_faces() -> dict:
+    from jarvis.core.server_client import server_client
+
+    if not server_client.server_available:
+        return {"status": "error", "message": "Server offline — cannot list registered persons"}
+
+    persons = await server_client.list_registered()
+    if persons is None:
+        return {"status": "error", "message": "Could not retrieve registered persons from server"}
+
+    if not persons:
+        return {"persons": [], "message": "No one is registered yet. Say 'remember my face' to register someone."}
+
+    lines = []
+    for p in persons:
+        modalities = []
+        if p.get("has_face"):
+            modalities.append("face")
+        if p.get("has_voice"):
+            modalities.append("voice")
+        lines.append(f"{p['name']} ({', '.join(modalities)})")
+
+    return {
+        "persons": persons,
+        "summary": f"I know {len(persons)} person(s): {', '.join(lines)}.",
+    }
+
+
+@mcp_tool(
+    name="rename_person",
+    description="Rename a registered person. Updates their face encodings, voice embeddings, and profile — use this to fix a typo or update a name.",
+    parameters={
+        "type": "object",
+        "properties": {
+            "old_name": {
+                "type": "string",
+                "description": "The person's current name (exactly as registered).",
+            },
+            "new_name": {
+                "type": "string",
+                "description": "The new name to use going forward.",
+            },
+        },
+        "required": ["old_name", "new_name"],
+    },
+)
+async def rename_person(old_name: str, new_name: str) -> dict:
+    from jarvis.core.server_client import server_client
+
+    if not server_client.server_available:
+        return {"status": "error", "message": "Server offline — cannot rename without server"}
+
+    result = await server_client.rename_person(old_name, new_name)
+    if not result:
+        return {
+            "status": "error",
+            "message": f"Could not rename '{old_name}'. They may not be registered — try list_registered_faces first.",
+        }
+
+    parts = []
+    if result.get("face_encodings_updated", 0):
+        parts.append(f"{result['face_encodings_updated']} face encoding(s)")
+    if result.get("voice_embeddings_updated", 0):
+        parts.append(f"{result['voice_embeddings_updated']} voice embedding(s)")
+    updated = " and ".join(parts) if parts else "profile"
+
+    return {
+        "status": "ok",
+        "old_name": old_name,
+        "new_name": new_name,
+        "message": f"Done — updated {updated}. I'll now recognise '{new_name}' instead of '{old_name}'.",
+    }
+
+
+@mcp_tool(
     name="get_person_info",
     description="Get stored information about a known person including preferences and encounter history.",
     parameters={

@@ -227,6 +227,48 @@ async def list_persons():
     return {"persons": registry.list_persons()}
 
 
+@app.get("/persons/registered")
+async def list_registered():
+    """List all persons with enrolled face and/or voice, with modality flags."""
+    face_svc = get_face_service()
+    voice_svc = get_voice_service()
+    face_names = {n.lower(): n for n in face_svc.list_registered()}
+    voice_names = {n.lower(): n for n in voice_svc.list_enrolled()}
+    all_keys = sorted(face_names.keys() | voice_names.keys())
+    return {
+        "persons": [
+            {
+                "name": face_names.get(k) or voice_names.get(k),
+                "has_face": k in face_names,
+                "has_voice": k in voice_names,
+            }
+            for k in all_keys
+        ]
+    }
+
+
+@app.post("/person/{name}/rename")
+async def rename_person(name: str, body: dict):
+    """Rename a person across face encodings, voice embeddings, and the registry."""
+    new_name = (body.get("new_name") or "").strip()
+    if not new_name:
+        return JSONResponse(status_code=400, content={"status": "error", "message": "new_name required"})
+    face_svc = get_face_service()
+    voice_svc = get_voice_service()
+    registry = get_person_registry()
+    face_count  = face_svc.rename(name, new_name)
+    voice_count = voice_svc.rename(name, new_name)
+    registry.rename(name, new_name)
+    logger.info("Renamed %r → %r (face=%d, voice=%d)", name, new_name, face_count, voice_count)
+    return {
+        "status": "ok",
+        "old_name": name,
+        "new_name": new_name,
+        "face_encodings_updated": face_count,
+        "voice_embeddings_updated": voice_count,
+    }
+
+
 @app.post("/person/{name}/preference")
 async def set_preference(name: str, body: dict):
     registry = get_person_registry()
