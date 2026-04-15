@@ -83,7 +83,7 @@ class GeminiLiveClient:
             system_instruction="\n".join(system_parts),
             speech_config=types.SpeechConfig(
                 voice_config=types.VoiceConfig(
-                    prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name="Aoede")
+                    prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name="Puck")
                 )
             ),
         )
@@ -182,42 +182,46 @@ class GeminiLiveClient:
                     from jarvis.audio.playback import audio_playback
                     _chunk_count = 0
                     try:
-                        async for msg in session.receive():
-                            if not active:
-                                break
-                            sc = msg.server_content
+                        # Outer loop — session.receive() ends after each turn,
+                        # keep calling it to receive subsequent turns.
+                        while active:
+                            async for msg in session.receive():
+                                if not active:
+                                    break
+                                sc = msg.server_content
 
-                            # Audio response — check both SDK paths
-                            pcm_bytes = None
-                            if getattr(msg, "data", None):
-                                pcm_bytes = msg.data
-                            elif sc and getattr(sc, "model_turn", None):
-                                for part in sc.model_turn.parts:
-                                    if getattr(part, "inline_data", None) and part.inline_data.data:
-                                        pcm_bytes = part.inline_data.data
-                                        break
+                                # Audio response — check both SDK paths
+                                pcm_bytes = None
+                                if getattr(msg, "data", None):
+                                    pcm_bytes = msg.data
+                                elif sc and getattr(sc, "model_turn", None):
+                                    for part in sc.model_turn.parts:
+                                        if getattr(part, "inline_data", None) and part.inline_data.data:
+                                            pcm_bytes = part.inline_data.data
+                                            break
 
-                            if pcm_bytes:
-                                _chunk_count += 1
-                                if _chunk_count == 1:
-                                    logger.info("Gemini audio response started")
-                                speaking = True
-                                await audio_playback.play_gemini_chunk(pcm_bytes, sample_rate=24000)
-                                await event_bus.publish("session.state_changed", {"state": "RESPONDING"})
+                                if pcm_bytes:
+                                    _chunk_count += 1
+                                    if _chunk_count == 1:
+                                        logger.info("Gemini audio response started")
+                                    speaking = True
+                                    await audio_playback.play_gemini_chunk(pcm_bytes, sample_rate=24000)
+                                    await event_bus.publish("session.state_changed", {"state": "RESPONDING"})
 
-                            if sc and getattr(sc, "interrupted", False):
-                                speaking = False
-                                logger.info("User interrupted Gemini")
+                                if sc and getattr(sc, "interrupted", False):
+                                    speaking = False
+                                    logger.info("User interrupted Gemini")
 
-                            if sc and getattr(sc, "turn_complete", False):
-                                await asyncio.sleep(0.3)
-                                speaking = False
-                                logger.info(
-                                    "Gemini turn complete (%d audio chunks) — listening",
-                                    _chunk_count,
-                                )
-                                _chunk_count = 0
-                                await event_bus.publish("session.state_changed", {"state": "LISTENING"})
+                                if sc and getattr(sc, "turn_complete", False):
+                                    await asyncio.sleep(0.3)
+                                    speaking = False
+                                    logger.info(
+                                        "Gemini turn complete (%d audio chunks) — listening",
+                                        _chunk_count,
+                                    )
+                                    _chunk_count = 0
+                                    await event_bus.publish("session.state_changed", {"state": "LISTENING"})
+                            # Inner iterator ended; loop to await the next turn.
 
                     except asyncio.CancelledError:
                         pass
